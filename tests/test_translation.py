@@ -1,0 +1,83 @@
+import sys
+from types import ModuleType, SimpleNamespace
+
+from speekify.translation import (
+    HuggingFaceTranslator,
+    TranslationResult,
+    detect_language_code,
+    should_translate_to_french,
+)
+
+
+def test_detect_language_code_detects_english_text() -> None:
+    text = "This article explains how a startup launched a product with careful experiments."
+    assert detect_language_code(text) == "en"
+
+
+def test_should_translate_to_french_only_for_english() -> None:
+    assert should_translate_to_french("en") is True
+    assert should_translate_to_french("fr") is False
+    assert should_translate_to_french(None) is False
+
+
+def test_translation_result_reports_change_when_text_changes() -> None:
+    result = TranslationResult(
+        text="Bonjour le monde",
+        translated=True,
+        source_language="en",
+        target_language="fr",
+        original_text="Hello world",
+    )
+
+    assert result.changed is True
+
+
+def test_build_backend_disables_transformers_progress_bar(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    fake_torch = ModuleType("torch")
+    fake_torch.backends = SimpleNamespace(
+        mps=SimpleNamespace(is_available=lambda: False),
+    )
+
+    class FakeTokenizer:
+        @classmethod
+        def from_pretrained(cls, model_name: str) -> str:
+            calls.append(("tokenizer", model_name))
+            return "tokenizer"
+
+    class FakeModelInstance:
+        def to(self, device: str) -> None:
+            calls.append(("model.to", device))
+
+    class FakeModel:
+        @classmethod
+        def from_pretrained(cls, model_name: str) -> FakeModelInstance:
+            calls.append(("model", model_name))
+            return FakeModelInstance()
+
+    fake_transformers = ModuleType("transformers")
+    fake_transformers.MarianTokenizer = FakeTokenizer
+    fake_transformers.MarianMTModel = FakeModel
+
+    fake_transformers_utils = ModuleType("transformers.utils")
+    fake_transformers_utils.logging = SimpleNamespace(
+        disable_progress_bar=lambda: calls.append(("disable_progress_bar", "called"))
+    )
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    monkeypatch.setitem(sys.modules, "transformers.utils", fake_transformers_utils)
+
+    translator = HuggingFaceTranslator(model_name="Helsinki-NLP/test-model")
+    _, tokenizer, model, device = translator._build_backend()
+
+    assert calls == [
+        ("disable_progress_bar", "called"),
+        ("tokenizer", "Helsinki-NLP/test-model"),
+        ("model", "Helsinki-NLP/test-model"),
+        ("model.to", "cpu"),
+    ]
+    assert tokenizer == "tokenizer"
+    assert model.__class__.__name__ == "FakeModelInstance"
+    assert device == "cpu"

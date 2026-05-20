@@ -1,0 +1,20 @@
+from pathlib import Path
+
+OUTPUT_DIR = Path("output")
+LOG_DIR = Path("logs")
+LOG_FILE_NAME = "speekify.log"
+MODEL_NAME = "supertonic-3"
+TRANSLATION_MODEL_NAME = "Helsinki-NLP/opus-mt-en-fr"
+DEFAULT_VOICE = "M1"
+DEFAULT_LANG = "fr"
+DEFAULT_SPEED = 1.05
+DEFAULT_STEPS = 8
+DEFAULT_SILENCE_DURATION = 0.3
+TRANSLATION_CHUNK_SIZE = 2_000
+MIN_SPEED = 0.7
+MAX_SPEED = 2.0
+MIN_STEPS = 1
+MAX_STEPS = 100
+MIN_URL_TEXT_LENGTH = 80
+
+VOICE_NAMES = ("M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5")

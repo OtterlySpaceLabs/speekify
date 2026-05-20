@@ -1,0 +1,174 @@
+from pathlib import Path
+
+import pytest
+import numpy as np
+
+from speekify.tts import SynthesisArtifact, SupertonicSynthesizer
+
+
+class FakeTTS:
+    def __init__(self, model: str) -> None:
+        self.model = model
+        self.saved: tuple[object, str] | None = None
+        self.sample_rate = 10
+
+    def get_voice_style(self, voice: str) -> str:
+        return f"style:{voice}"
+
+    def synthesize(
+        self,
+        text: str,
+        *,
+        voice_style: str,
+        lang: str,
+        total_steps: int,
+        speed: float,
+        silence_duration: float,
+    ) -> tuple[list[float], list[float]]:
+        assert text == "Bonjour"
+        assert voice_style == "style:M1"
+        assert lang == "fr"
+        assert total_steps == 8
+        assert speed == 1.05
+        assert silence_duration == 0.3
+        return np.array([[0.0, 0.1]], dtype=np.float32), np.array([1.23], dtype=np.float32)
+
+    def save_audio(self, wav: list[float], output_path: str) -> None:
+        self.saved = (wav, output_path)
+        Path(output_path).write_bytes(b"wav")
+
+
+class FakeTextProcessor:
+    def __init__(self, is_valid: bool, unsupported: list[str]) -> None:
+        self._is_valid = is_valid
+        self._unsupported = unsupported
+
+    def validate_text(self, text: str) -> tuple[bool, list[str]]:
+        if self._is_valid:
+            return True, []
+        remaining = [char for char in self._unsupported if char in text]
+        return len(remaining) == 0, remaining
+
+    def _preprocess_text(self, text: str, lang: str | None = None) -> str:
+        return text
+
+
+class FakeModel:
+    def __init__(self, processor: FakeTextProcessor) -> None:
+        self.text_processor = processor
+
+
+class FakeTTSWithValidation(FakeTTS):
+    def __init__(self, model: str, *, is_valid: bool, unsupported: list[str]) -> None:
+        super().__init__(model=model)
+        self.model = FakeModel(FakeTextProcessor(is_valid=is_valid, unsupported=unsupported))
+
+
+def test_synthesizer_saves_audio(tmp_path) -> None:
+    fake = FakeTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    output = tmp_path / "test.wav"
+
+    artifact = synth.synthesize_to_file(
+        text="Bonjour",
+        output_path=output,
+        voice="M1",
+        lang="fr",
+        steps=8,
+        speed=1.05,
+        silence_duration=0.3,
+    )
+
+    assert isinstance(artifact, SynthesisArtifact)
+    assert artifact.duration_seconds == pytest.approx(1.23)
+    assert artifact.batch_count == 1
+    assert output.read_bytes() == b"wav"
+    assert fake.saved is not None
+    wav, saved_path = fake.saved
+    assert saved_path == str(output)
+    assert wav.shape == (1, 2)
+
+
+def test_synthesizer_removes_unsupported_characters_permissively() -> None:
+    fake = FakeTTSWithValidation(
+        model="supertonic-3",
+        is_valid=False,
+        unsupported=["世", "界"],
+    )
+    synth = SupertonicSynthesizer(engine=fake)
+
+    prepared = synth.prepare_text("Bonjour 世界")
+
+    assert prepared.text == "Bonjour"
+    assert prepared.removed_characters == ("世", "界")
+    assert prepared.removed_character_count == 2
+    assert prepared.changed is True
+
+
+class FakePermissiveTextProcessor:
+    def validate_text(self, text: str) -> tuple[bool, list[str]]:
+        unsupported = sorted({char for char in text if char in {"😀", "🚀"}})
+        return len(unsupported) == 0, unsupported
+
+    def _preprocess_text(self, text: str, lang: str | None = None) -> str:
+        return " ".join(text.split())
+
+
+class FakePermissiveModel:
+    def __init__(self) -> None:
+        self.text_processor = FakePermissiveTextProcessor()
+
+
+class FakeBatchingTTS:
+    def __init__(self, model: str) -> None:
+        self.model = FakePermissiveModel()
+        self.sample_rate = 10
+        self.calls: list[str] = []
+
+    def get_voice_style(self, voice: str) -> str:
+        return f"style:{voice}"
+
+    def synthesize(
+        self,
+        text: str,
+        *,
+        voice_style: str,
+        lang: str,
+        total_steps: int,
+        speed: float,
+        silence_duration: float,
+        max_chunk_length: int | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        assert voice_style == "style:M1"
+        assert lang == "fr"
+        self.calls.append(text)
+        wav = np.ones((1, len(text)), dtype=np.float32)
+        duration = np.array([len(text) / 10], dtype=np.float32)
+        return wav, duration
+
+    def save_audio(self, wav: np.ndarray, output_path: str) -> None:
+        Path(output_path).write_bytes(b"wav")
+
+
+def test_synthesizer_batches_very_long_text_and_merges_audio(tmp_path) -> None:
+    fake = FakeBatchingTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    output = tmp_path / "batched.wav"
+
+    artifact = synth.synthesize_to_file(
+        text="Bonjour 😀 monde. Encore un peu de texte pour tester le batch auto.",
+        output_path=output,
+        voice="M1",
+        lang="fr",
+        steps=8,
+        speed=1.05,
+        silence_duration=0.3,
+        max_batch_length=20,
+    )
+
+    assert artifact.batch_count > 1
+    assert artifact.prepared_text.removed_characters == ("😀",)
+    assert artifact.prepared_text.removed_character_count == 1
+    assert len(fake.calls) == artifact.batch_count
+    assert artifact.wav.shape[0] == 1
+    assert output.read_bytes() == b"wav"
