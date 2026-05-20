@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -10,10 +11,16 @@ from speekify.config import MODEL_NAME
 
 try:
     from supertonic import TTS
-    from supertonic.config import MAX_TEXT_LENGTH as SUPERTONIC_MAX_TEXT_LENGTH
+    from supertonic.config import (
+        DEFAULT_MAX_CHUNK_LENGTH,
+        DEFAULT_MAX_CHUNK_LENGTH_KO,
+        MAX_TEXT_LENGTH as SUPERTONIC_MAX_TEXT_LENGTH,
+    )
     from supertonic.utils import chunk_text as supertonic_chunk_text
 except ImportError:  # pragma: no cover - exercised only when dependency is absent.
     TTS = None  # type: ignore[assignment]
+    DEFAULT_MAX_CHUNK_LENGTH = 300
+    DEFAULT_MAX_CHUNK_LENGTH_KO = 120
     SUPERTONIC_MAX_TEXT_LENGTH = 100_000
     supertonic_chunk_text = None
 
@@ -120,21 +127,23 @@ class SupertonicSynthesizer:
         self,
         text: str,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
+        preferred_chunk_length: int | None = None,
     ) -> list[str]:
         if max_batch_length < 10:
             raise ValueError("La taille maximale d'un batch doit etre au moins 10 caracteres.")
 
-        if len(text) <= max_batch_length:
-            return [text]
+        split_limit = max_batch_length
+        if preferred_chunk_length is not None:
+            split_limit = min(split_limit, preferred_chunk_length)
 
         if supertonic_chunk_text is not None:
-            initial_batches = supertonic_chunk_text(text, max_batch_length)
+            initial_batches = supertonic_chunk_text(text, split_limit)
         else:  # pragma: no cover - fallback only used without supertonic installed.
             initial_batches = [text]
 
         batches: list[str] = []
         for batch in initial_batches:
-            batches.extend(self._split_overlong_batch(batch, max_batch_length))
+            batches.extend(self._split_overlong_batch(batch, split_limit))
 
         return [batch for batch in batches if batch.strip()]
 
@@ -197,20 +206,27 @@ class SupertonicSynthesizer:
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
     ) -> SynthesisArtifact:
         style = self.engine.get_voice_style(voice)
-        batches = self.split_text_into_batches(prepared_text.text, max_batch_length=max_batch_length)
+        max_chunk_length = self._default_chunk_length(lang)
+        batches = self.split_text_into_batches(
+            prepared_text.text,
+            max_batch_length=max_batch_length,
+            preferred_chunk_length=max_chunk_length,
+        )
 
         wav_list: list[np.ndarray] = []
         duration_seconds = 0.0
 
         for batch in batches:
-            wav, duration = self.engine.synthesize(
-                batch,
-                voice_style=style,
-                lang=lang,
-                total_steps=steps,
-                speed=speed,
-                silence_duration=silence_duration,
-            )
+            synthesize_kwargs = {
+                "voice_style": style,
+                "lang": lang,
+                "total_steps": steps,
+                "speed": speed,
+                "silence_duration": silence_duration,
+            }
+            if self._engine_accepts_max_chunk_length():
+                synthesize_kwargs["max_chunk_length"] = max_chunk_length
+            wav, duration = self.engine.synthesize(batch, **synthesize_kwargs)
             wav_list.append(wav)
             duration_seconds += self._duration_to_float(duration)
 
@@ -242,6 +258,15 @@ class SupertonicSynthesizer:
     @property
     def _text_processor(self) -> Any | None:
         return getattr(getattr(self.engine, "model", None), "text_processor", None)
+
+    def _default_chunk_length(self, lang: str) -> int:
+        if lang == "ko":
+            return DEFAULT_MAX_CHUNK_LENGTH_KO
+        return DEFAULT_MAX_CHUNK_LENGTH
+
+    def _engine_accepts_max_chunk_length(self) -> bool:
+        synthesize = getattr(self.engine, "synthesize")
+        return "max_chunk_length" in inspect.signature(synthesize).parameters
 
     def _split_overlong_batch(self, text: str, max_batch_length: int) -> list[str]:
         remaining = text.strip()

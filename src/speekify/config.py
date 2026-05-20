@@ -5,6 +5,7 @@ LOG_DIR = Path("logs")
 LOG_FILE_NAME = "speekify.log"
 MODEL_NAME = "supertonic-3"
 TRANSLATION_MODEL_NAME = "Helsinki-NLP/opus-mt-en-fr"
+TRANSLATION_CHUNK_TOKEN_LIMIT = 128
 DEFAULT_VOICE = "M1"
 DEFAULT_LANG = "fr"
 DEFAULT_SPEED = 1.05

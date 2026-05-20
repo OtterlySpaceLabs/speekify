@@ -172,3 +172,36 @@ def test_synthesizer_batches_very_long_text_and_merges_audio(tmp_path) -> None:
     assert len(fake.calls) == artifact.batch_count
     assert artifact.wav.shape[0] == 1
     assert output.read_bytes() == b"wav"
+
+
+def test_split_text_into_batches_splits_single_overlong_sentence() -> None:
+    fake = FakeBatchingTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    text = "mot" * 140
+
+    batches = synth.split_text_into_batches(text, preferred_chunk_length=50)
+
+    assert len(batches) > 1
+    assert "".join(batch.replace(" ", "") for batch in batches) == text
+    assert all(len(batch) <= 50 for batch in batches)
+
+
+def test_synthesizer_uses_language_chunk_limit_for_single_long_sentence(tmp_path) -> None:
+    fake = FakeBatchingTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    output = tmp_path / "single-sentence.wav"
+    text = "mot" * 140
+
+    artifact = synth.synthesize_to_file(
+        text=text,
+        output_path=output,
+        voice="M1",
+        lang="fr",
+        steps=8,
+        speed=1.05,
+        silence_duration=0.3,
+    )
+
+    assert artifact.batch_count > 1
+    assert all(len(call) <= 300 for call in fake.calls)
+    assert output.read_bytes() == b"wav"

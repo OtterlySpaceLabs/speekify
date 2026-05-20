@@ -4,6 +4,7 @@ from types import ModuleType, SimpleNamespace
 from speekify.translation import (
     HuggingFaceTranslator,
     TranslationResult,
+    _split_text_for_translation,
     detect_language_code,
     should_translate_to_french,
 )
@@ -81,3 +82,27 @@ def test_build_backend_disables_transformers_progress_bar(monkeypatch) -> None:
     assert tokenizer == "tokenizer"
     assert model.__class__.__name__ == "FakeModelInstance"
     assert device == "cpu"
+
+
+def test_split_text_for_translation_respects_token_budget() -> None:
+    text = "alpha beta gamma. delta epsilon zeta. eta theta iota."
+
+    chunks = _split_text_for_translation(
+        text,
+        max_chars=200,
+        max_tokens=4,
+        token_length=lambda value: len(value.split()),
+    )
+
+    assert len(chunks) == 3
+    assert all(len(chunk.split()) <= 4 for chunk in chunks)
+
+
+def test_split_text_for_translation_splits_single_overlong_sentence_on_spaces() -> None:
+    text = "un deux trois quatre cinq six sept huit neuf dix"
+
+    chunks = _split_text_for_translation(text, max_chars=12)
+
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 12 for chunk in chunks)
+    assert " ".join(chunks) == text
