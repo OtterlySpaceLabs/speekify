@@ -95,6 +95,41 @@ def test_main_passes_explicit_language_code(tmp_path, monkeypatch, capsys) -> No
     assert str(tmp_path / "fr.wav") in stdout
 
 
+def test_main_does_not_warn_for_batching_or_reformatting(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+        return GenerationResult(
+            output_path=tmp_path / "batched.wav",
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=3.0,
+                batch_count=3,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text="Hello from Speekify.",
+                    reformatted=True,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text=request.source_text),
+        )
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+
+    exit_code = main(["Hello", "from", "Speekify"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Batches" in stdout
+    assert "3" in stdout
+    assert "Attention" not in stdout
+    assert "Warning" not in stdout
+
+
 def test_main_rejects_invalid_language_code(capsys) -> None:
     try:
         main(["--lang", "en-US", "Hello"])
@@ -120,6 +155,24 @@ def test_main_prints_hint_for_unsupported_characters(monkeypatch, capsys) -> Non
 
     assert exit_code == 1
     assert "Remove or replace" in stderr
+    assert "Log file:" not in stderr
+
+
+def test_main_verbose_prints_log_path_on_error(monkeypatch, capsys) -> None:
+    async def fake_generate_audio(*_: object, **__: object) -> GenerationResult:
+        raise RuntimeError("Model failed to load")
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+
+    exit_code = main(["--verbose", "Hello"])
+    stderr = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Model failed to load" in stderr
+    assert "Log file:" in stderr
+    assert "logs/speekify.log" in stderr
 
 
 def test_main_help_lists_supported_languages(capsys) -> None:

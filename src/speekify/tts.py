@@ -39,8 +39,6 @@ class PreparedText:
 
     def summary_notes(self) -> list[str]:
         notes: list[str] = []
-        if self.reformatted:
-            notes.append("text reformatted automatically")
         if self.removed_character_count:
             preview = ", ".join(repr(char) for char in self.removed_characters[:6])
             suffix = ", ..." if len(self.removed_characters) > 6 else ""
@@ -58,11 +56,7 @@ class SynthesisArtifact:
     prepared_text: PreparedText
 
     def summary_notes(self) -> list[str]:
-        notes: list[str] = []
-        if self.batch_count > 1:
-            notes.append(f"batch auto: {self.batch_count}")
-        notes.extend(self.prepared_text.summary_notes())
-        return notes
+        return self.prepared_text.summary_notes()
 
 
 class SupertonicSynthesizer:

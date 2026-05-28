@@ -46,6 +46,8 @@ speekify https://example.com/article
 printf 'Hello from stdin' | speekify
 ```
 
+The CLI uses concise Rich output: progress/status indicators during longer work, a result panel when the WAV file is ready, and readable error messages. Technical log paths are shown only with `--verbose`.
+
 ### CLI commands
 
 All examples below work with the installed binary (`speekify …`) or directly from the source tree (`uv run speekify …`). The `uv run` form is shown alongside each group.
@@ -88,6 +90,10 @@ uv run speekify setup
 speekify setup --skip-translation   # skip the EN→FR translation model
 uv run speekify setup --skip-translation
 
+# Show technical diagnostics when needed
+speekify --verbose "Hello world"
+uv run speekify --verbose "Hello world"
+
 # Show help
 speekify --help
 uv run speekify --help
@@ -108,6 +114,7 @@ uv run speekify setup --help
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
+| `--verbose` | disabled | Show technical diagnostics such as the log file path when a command fails. |
 
 By default, direct CLI generation writes the WAV file into the current working directory, with names like:
 
@@ -141,4 +148,4 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
 - Very large inputs are split into external batches automatically and merged into one final WAV file.
 - The steps control follows the SDK range `1..100`, with `8` as the default.
-- If generation fails, detailed logs are written to `logs/speekify.log`.
+- If generation fails, the terminal shows a short user-focused error. Add `--verbose` to include the technical log path (`logs/speekify.log`).

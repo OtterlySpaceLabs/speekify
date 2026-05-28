@@ -84,6 +84,54 @@ def test_build_backend_disables_transformers_progress_bar(monkeypatch) -> None:
     assert device == "cpu"
 
 
+def test_translate_chunk_uses_max_length_without_max_new_tokens() -> None:
+    calls: dict[str, object] = {}
+
+    class FakeTensor:
+        shape = (1, 3)
+
+        def to(self, device: str) -> "FakeTensor":
+            calls["device"] = device
+            return self
+
+    class FakeTorch:
+        class _NoGrad:
+            def __enter__(self) -> None:
+                return None
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+        @staticmethod
+        def no_grad() -> "FakeTorch._NoGrad":
+            return FakeTorch._NoGrad()
+
+    class FakeTokenizer:
+        def __call__(self, text: str, **kwargs: object) -> dict[str, FakeTensor]:
+            calls["tokenizer"] = (text, kwargs)
+            return {"input_ids": FakeTensor()}
+
+        def decode(self, output_ids: object, *, skip_special_tokens: bool) -> str:
+            calls["decode"] = (output_ids, skip_special_tokens)
+            return "Bonjour"
+
+    class FakeModel:
+        def generate(self, **kwargs: object) -> list[list[int]]:
+            calls["generate"] = kwargs
+            return [[1, 2, 3]]
+
+    translator = HuggingFaceTranslator()
+    translator._backend = (FakeTorch, FakeTokenizer(), FakeModel(), "cpu")
+
+    assert translator._translate_chunk("Hello") == "Bonjour"
+    assert calls["device"] == "cpu"
+    generate_kwargs = calls["generate"]
+    assert isinstance(generate_kwargs, dict)
+    assert "input_ids" in generate_kwargs
+    assert generate_kwargs["max_length"] == 512
+    assert "max_new_tokens" not in generate_kwargs
+
+
 def test_split_text_for_translation_respects_token_budget() -> None:
     text = "alpha beta gamma. delta epsilon zeta. eta theta iota."
 

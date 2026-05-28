@@ -9,6 +9,7 @@ from speekify.config import (
     DEFAULT_TRANSLATION_TARGET_LANG,
     TRANSLATION_CHUNK_SIZE,
     TRANSLATION_CHUNK_TOKEN_LIMIT,
+    TRANSLATION_MAX_LENGTH,
     TRANSLATION_MODEL_NAME,
 )
 
@@ -119,7 +120,7 @@ class HuggingFaceTranslator:
         inputs = {name: value.to(device) for name, value in inputs.items()}
 
         with torch.no_grad():
-            output_ids = model.generate(**inputs, max_new_tokens=512)
+            output_ids = model.generate(**inputs, max_length=TRANSLATION_MAX_LENGTH)
 
         return str(tokenizer.decode(output_ids[0], skip_special_tokens=True)).strip()
 

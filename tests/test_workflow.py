@@ -126,7 +126,7 @@ def test_resolve_content_translates_english_text_to_french() -> None:
     assert statuses == ["checking language", "translating to French"]
 
 
-def test_generate_audio_returns_cleanup_and_batch_summary(tmp_path) -> None:
+def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
     statuses: list[str] = []
 
     result = asyncio.run(
@@ -149,8 +149,6 @@ def test_generate_audio_returns_cleanup_and_batch_summary(tmp_path) -> None:
     assert result.output_path.read_text(encoding="utf-8") == "wav"
     assert result.artifact.duration_seconds == 2.5
     assert result.artifact.summary_notes() == [
-        "batch auto: 3",
-        "text reformatted automatically",
         "1 character(s) removed: '😀'",
     ]
     assert statuses == [

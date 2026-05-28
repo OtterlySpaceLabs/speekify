@@ -1,137 +1,284 @@
 from __future__ import annotations
 
-import argparse
 import asyncio
+import logging
 import sys
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+import click
+import typer
+from rich import box
+from rich.panel import Panel
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
+from rich.table import Table
 
 from speekify.config import (
     DEFAULT_SPEED,
     DEFAULT_STEPS,
     DEFAULT_TTS_LANG,
     DEFAULT_VOICE,
+    MAX_SPEED,
+    MAX_STEPS,
+    MIN_SPEED,
+    MIN_STEPS,
     SUPPORTED_TTS_LANGUAGES,
     UNKNOWN_TTS_LANGUAGE,
     VOICE_NAMES,
 )
+from speekify.console import console, error_console
 from speekify.logging_utils import configure_logger
 
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="speekify",
-        description="Generate a WAV file from text or a URL.",
-        epilog=_build_cli_epilog(),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "source",
-        nargs="*",
+
+def _build_cli_epilog() -> str:
+    examples = [
+        "Examples:",
+        '  speekify "Hello world"',
+        '  speekify --lang fr "Hello world"',
+        '  speekify --lang ja https://example.com/article',
+        "  printf 'Hello from stdin' | speekify",
+        "  speekify setup --help",
+        "",
+        f"Supported languages: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
+        f"Use {UNKNOWN_TTS_LANGUAGE} for language-agnostic synthesis if needed.",
+    ]
+    return "\n".join(examples)
+
+
+GENERATION_HELP = (
+    "Generate a local WAV file from text, stdin, or a readable URL.\n\n" + _build_cli_epilog()
+)
+SETUP_HELP = "Download and warm up the models used by Speekify."
+
+
+def _parse_language_code(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in SUPPORTED_TTS_LANGUAGES:
+        available = ", ".join(SUPPORTED_TTS_LANGUAGES)
+        raise typer.BadParameter(
+            "Language code must be supported by Supertonic. "
+            f"Available values: {available}"
+        )
+    return normalized
+
+
+def _parse_voice_name(value: str) -> str:
+    normalized = value.strip().upper()
+    if normalized not in VOICE_NAMES:
+        available = ", ".join(VOICE_NAMES)
+        raise typer.BadParameter(f"Voice must be one of: {available}")
+    return normalized
+
+
+SourceArgument = Annotated[
+    list[str] | None,
+    typer.Argument(
+        metavar="SOURCE...",
         help="Text to synthesize or a single URL to extract. Omit only when using stdin.",
-    )
-    parser.add_argument("--url", action="store_true", help="Force URL extraction mode.")
-    parser.add_argument("--title", default="", help="Optional output title.")
-    parser.add_argument("--voice", choices=VOICE_NAMES, default=DEFAULT_VOICE, help="Supertonic voice.")
-    parser.add_argument(
+        show_default=False,
+    ),
+]
+UrlOption = Annotated[
+    bool,
+    typer.Option("--url", help="Force URL extraction mode even if the source looks like text."),
+]
+TitleOption = Annotated[
+    str,
+    typer.Option("--title", help="Output file title without extension."),
+]
+VoiceOption = Annotated[
+    str,
+    typer.Option("--voice", callback=_parse_voice_name, help="Supertonic voice: M1-M5 or F1-F5."),
+]
+LanguageOption = Annotated[
+    str,
+    typer.Option(
         "--lang",
-        default=DEFAULT_TTS_LANG,
-        type=_parse_language_code,
-        help="Supertonic-supported ISO 639-1 code, for example en, fr, or ja. Default: en.",
-    )
-    parser.add_argument("--speed", type=float, default=DEFAULT_SPEED, help="Playback speed.")
-    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS, help="Number of synthesis steps.")
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=None,
-        help="Output directory. Default: current directory.",
-    )
-    return parser
-
-
-def build_setup_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="speekify setup",
-        description="Download and warm up the models used by Speekify.",
-    )
-    parser.add_argument(
+        callback=_parse_language_code,
+        help="Supertonic ISO 639-1 language code, for example en, fr, ja, or na.",
+    ),
+]
+SpeedOption = Annotated[
+    float,
+    typer.Option(
+        "--speed",
+        min=MIN_SPEED,
+        max=MAX_SPEED,
+        help=f"Playback speed multiplier ({MIN_SPEED}-{MAX_SPEED}).",
+    ),
+]
+StepsOption = Annotated[
+    int,
+    typer.Option(
+        "--steps",
+        min=MIN_STEPS,
+        max=MAX_STEPS,
+        help=f"Synthesis steps ({MIN_STEPS}-{MAX_STEPS}). Higher can improve quality.",
+    ),
+]
+OutputDirOption = Annotated[
+    Path | None,
+    typer.Option("--output-dir", help="Directory where the WAV file is written."),
+]
+VerboseOption = Annotated[
+    bool,
+    typer.Option("--verbose", help="Show technical diagnostics such as log file paths."),
+]
+SkipTranslationOption = Annotated[
+    bool,
+    typer.Option(
         "--skip-translation",
-        action="store_true",
         help="Do not warm up the English-to-French translation model.",
+    ),
+]
+
+generation_app = typer.Typer(
+    add_completion=False,
+    context_settings=CONTEXT_SETTINGS,
+    no_args_is_help=False,
+    rich_markup_mode="rich",
+)
+setup_app = typer.Typer(
+    add_completion=False,
+    context_settings=CONTEXT_SETTINGS,
+    no_args_is_help=False,
+    rich_markup_mode="rich",
+)
+
+
+@generation_app.command(help=GENERATION_HELP)
+def generation_command(
+    source: SourceArgument = None,
+    url: UrlOption = False,
+    title: TitleOption = "",
+    voice: VoiceOption = DEFAULT_VOICE,
+    language_code: LanguageOption = DEFAULT_TTS_LANG,
+    speed: SpeedOption = DEFAULT_SPEED,
+    steps: StepsOption = DEFAULT_STEPS,
+    output_dir: OutputDirOption = None,
+    verbose: VerboseOption = False,
+) -> int:
+    return _run_generation(
+        source=source,
+        is_url_mode=url,
+        title=title,
+        voice=voice,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        output_dir=output_dir,
+        verbose=verbose,
     )
-    return parser
+
+
+@setup_app.command(help=SETUP_HELP)
+def setup_command(
+    skip_translation: SkipTranslationOption = False,
+    verbose: VerboseOption = False,
+) -> int:
+    return _run_setup(skip_translation=skip_translation, verbose=verbose)
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-
     if argv and argv[0] == "setup":
-        return _run_setup(argv[1:])
+        return _invoke_typer(setup_app, argv[1:], prog_name="speekify setup")
+    return _invoke_typer(generation_app, argv, prog_name="speekify")
 
-    parser = build_parser()
-    args = parser.parse_args(argv)
 
-    source = _read_source(args.source)
-    if source is None:
-        parser.error("a text source, URL, or stdin is required")
+def _invoke_typer(app: typer.Typer, argv: list[str], *, prog_name: str) -> int:
+    help_requested = any(arg in {"-h", "--help"} for arg in argv)
+    try:
+        result = app(args=argv, prog_name=prog_name, standalone_mode=False)
+    except click.exceptions.Exit as exc:
+        raise SystemExit(exc.exit_code) from exc
+    except click.exceptions.UsageError as exc:
+        _render_cli_error(exc)
+        raise SystemExit(exc.exit_code) from exc
+    except click.exceptions.ClickException as exc:
+        _render_cli_error(exc)
+        raise SystemExit(exc.exit_code) from exc
 
-    logger, log_path = configure_logger()
+    if help_requested:
+        raise SystemExit(0)
+    return result if isinstance(result, int) else 0
+
+
+def _run_generation(
+    *,
+    source: Sequence[str] | None,
+    is_url_mode: bool,
+    title: str,
+    voice: str,
+    language_code: str,
+    speed: float,
+    steps: int,
+    output_dir: Path | None,
+    verbose: bool,
+) -> int:
+    source_text = _read_source(source)
+    if source_text is None:
+        raise click.UsageError("A text source, URL, or stdin is required.")
+
+    logger, log_path = configure_logger(verbose=verbose)
     synthesizer = _build_synthesizer()
     translator = _build_translator()
 
     try:
-        generation = asyncio.run(
-            generate_audio(
-                _build_generation_request(
-                    source_text=source,
-                    voice=args.voice,
-                    language_code=args.lang,
-                    speed=args.speed,
-                    steps=args.steps,
-                    title=args.title.strip(),
-                    is_url_mode=args.url,
-                    output_dir=args.output_dir or Path.cwd(),
-                ),
-                synthesizer=synthesizer,
-                translator=translator,
-                logger=logger,
+        with console.status(_format_status("starting"), spinner="dots") as status:
+
+            def update_status(message: str) -> None:
+                status.update(_format_status(message))
+
+            generation = asyncio.run(
+                generate_audio(
+                    _build_generation_request(
+                        source_text=source_text,
+                        voice=voice,
+                        language_code=language_code,
+                        speed=speed,
+                        steps=steps,
+                        title=title.strip(),
+                        is_url_mode=is_url_mode,
+                        output_dir=output_dir or Path.cwd(),
+                    ),
+                    synthesizer=synthesizer,
+                    translator=translator,
+                    logger=logger,
+                    status_callback=update_status,
+                )
             )
-        )
     except Exception as exc:
         logger.exception("CLI generation failed")
-        print(_format_error_message(exc, log_path), file=sys.stderr)
+        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
         return 1
 
-    print(_format_success_message(generation.output_path, generation.artifact))
+    _render_generation_success(generation, log_path=log_path if verbose else None)
     return 0
 
 
-def _run_setup(argv: list[str]) -> int:
-    parser = build_setup_parser()
-    args = parser.parse_args(argv)
-    logger, log_path = configure_logger()
+def _run_setup(*, skip_translation: bool, verbose: bool) -> int:
+    logger, log_path = configure_logger(verbose=verbose)
     synthesizer = _build_synthesizer()
     translator = _build_translator()
+    include_translation = not skip_translation
 
     try:
         _warm_up_models(
             synthesizer=synthesizer,
             translator=translator,
-            include_translation=not args.skip_translation,
+            include_translation=include_translation,
             logger=logger,
         )
     except Exception as exc:
         logger.exception("CLI setup failed")
-        print(_format_error_message(exc, log_path), file=sys.stderr)
+        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
         return 1
 
-    print("Supertonic model ready.")
-    if args.skip_translation:
-        print("Translation model skipped.")
-    else:
-        print("Translation model ready.")
+    _render_setup_success(include_translation=include_translation, log_path=log_path if verbose else None)
     return 0
 
 
@@ -159,41 +306,39 @@ def generate_audio(*args: Any, **kwargs: Any) -> Awaitable[Any]:
     return run_generate_audio(*args, **kwargs)
 
 
-def _warm_up_models(*, synthesizer: object, translator: object, include_translation: bool, logger) -> None:
+def _warm_up_models(
+    *,
+    synthesizer: object,
+    translator: object,
+    include_translation: bool,
+    logger: logging.Logger,
+) -> None:
     logger.info("Warmup started include_translation=%s", include_translation)
-    _ = getattr(synthesizer, "engine")
+    warmups: list[tuple[str, Callable[[], object]]] = [
+        ("Supertonic model", lambda: getattr(synthesizer, "engine")),
+    ]
     if include_translation:
-        _ = getattr(translator, "backend")
+        warmups.append(("Translation model", lambda: getattr(translator, "backend")))
+
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task_id = progress.add_task("Preparing models", total=len(warmups))
+        for label, load_model in warmups:
+            progress.update(task_id, description=label)
+            load_model()
+            progress.advance(task_id)
+
     logger.info("Warmup finished include_translation=%s", include_translation)
 
 
-def _parse_language_code(value: str) -> str:
-    normalized = value.strip().lower()
-    if normalized not in SUPPORTED_TTS_LANGUAGES:
-        available = ", ".join(SUPPORTED_TTS_LANGUAGES)
-        raise argparse.ArgumentTypeError(
-            "Language code must be supported by Supertonic. "
-            f"Available values: {available}"
-        )
-    return normalized
-
-
-def _build_cli_epilog() -> str:
-    examples = [
-        "Examples:",
-        '  speekify "Hello world"',
-        '  speekify --lang fr "Hello world"',
-        '  speekify --lang ja https://example.com/article',
-        "  speekify setup --help",
-        "",
-        f"Supported languages: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
-        f"Use {UNKNOWN_TTS_LANGUAGE} for language-agnostic synthesis if needed.",
-    ]
-    return "\n".join(examples)
-
-
-def _read_source(source_parts: list[str]) -> str | None:
-    inline_source = " ".join(source_parts).strip()
+def _read_source(source_parts: Sequence[str] | None) -> str | None:
+    inline_source = " ".join(source_parts or ()).strip()
     if inline_source:
         return inline_source
 
@@ -212,19 +357,130 @@ def _read_source(source_parts: list[str]) -> str | None:
     return None
 
 
-def _format_error_message(error: Exception, log_path: Path) -> str:
-    message = str(error)
+def _format_status(message: str) -> str:
+    labels = {
+        "starting": "Preparing Speekify",
+        "extracting URL": "Extracting readable page text",
+        "checking language": "Checking input language",
+        "translating to French": "Translating to French",
+        "preparing text": "Preparing text",
+        "loading model": "Loading speech model",
+        "synthesizing": "Generating speech",
+        "saving": "Saving WAV file",
+    }
+    return f"[cyan]{labels.get(message, message.capitalize())}...[/cyan]"
+
+
+def _format_error_message(error: Exception, *, log_path: Path | None = None) -> str:
+    message = str(error).strip() or error.__class__.__name__
     if "unsupported by Supertonic" in message:
-        return f"{message}. Remove or replace these characters. See {log_path}"
-    return f"{message} (see {log_path})"
+        message = f"{message}. Remove or replace these characters, then run Speekify again."
+    elif "Text cannot be empty" in message:
+        message = "The input text is empty. Provide text, a URL, or piped stdin."
+
+    if log_path is not None:
+        message = f"{message}\nLog file: {log_path}"
+    return message
 
 
-def _format_success_message(output_path: Path, artifact: Any) -> str:
-    lines = [str(output_path), f"{artifact.duration_seconds:.2f}s"]
-    notes = artifact.summary_notes()
-    if notes:
-        lines.append("Auto: " + "; ".join(notes))
-    return "\n".join(lines)
+def _render_cli_error(error: click.exceptions.ClickException) -> None:
+    error_console.print(
+        Panel(
+            error.format_message(),
+            title="Error",
+            title_align="left",
+            border_style="red",
+            box=box.ROUNDED,
+        )
+    )
+
+
+def _render_runtime_error(error: Exception, *, log_path: Path, verbose: bool) -> None:
+    error_console.print(
+        Panel(
+            _format_error_message(error, log_path=log_path if verbose else None),
+            title="Error",
+            title_align="left",
+            border_style="red",
+            box=box.ROUNDED,
+        )
+    )
+
+
+def _render_generation_success(generation: Any, *, log_path: Path | None) -> None:
+    table = Table(show_header=False, box=box.SIMPLE, expand=False)
+    table.add_column("Field", style="bold")
+    table.add_column("Value")
+    table.add_row("File", str(generation.output_path))
+    table.add_row("Duration", f"{generation.artifact.duration_seconds:.2f}s")
+    table.add_row("Batches", str(generation.artifact.batch_count))
+    if log_path is not None:
+        table.add_row("Log", str(log_path))
+
+    console.print(
+        Panel(
+            table,
+            title="Audio ready",
+            title_align="left",
+            border_style="green",
+            box=box.ROUNDED,
+        )
+    )
+    console.print(
+        f"Saved: {generation.output_path}",
+        style="green",
+        no_wrap=True,
+        overflow="ignore",
+        crop=False,
+    )
+    console.print(f"Duration: {generation.artifact.duration_seconds:.2f}s", style="green")
+    _render_warnings(generation.artifact.summary_notes())
+
+
+def _render_setup_success(*, include_translation: bool, log_path: Path | None) -> None:
+    table = Table(show_header=False, box=box.SIMPLE, expand=False)
+    table.add_column("Model", style="bold")
+    table.add_column("Status")
+    table.add_row("Supertonic model", "ready")
+    table.add_row("Translation model", "ready" if include_translation else "skipped")
+    if log_path is not None:
+        table.add_row("Log", str(log_path))
+
+    console.print(
+        Panel(
+            table,
+            title="Setup complete",
+            title_align="left",
+            border_style="green",
+            box=box.ROUNDED,
+        )
+    )
+    console.print("Supertonic model ready.", style="green")
+    if include_translation:
+        console.print("Translation model ready.", style="green")
+    else:
+        console.print("Translation model skipped.", style="yellow")
+
+
+def _render_warnings(notes: Sequence[str]) -> None:
+    if not notes:
+        return
+
+    warning_table = Table(show_header=False, box=box.SIMPLE, expand=False)
+    warning_table.add_column("Kind", style="yellow")
+    warning_table.add_column("Message")
+    for note in notes:
+        warning_table.add_row("Warning", note)
+
+    console.print(
+        Panel(
+            warning_table,
+            title="Attention",
+            title_align="left",
+            border_style="yellow",
+            box=box.ROUNDED,
+        )
+    )
 
 
 if __name__ == "__main__":
