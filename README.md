@@ -25,7 +25,7 @@ mv speekify /usr/local/bin/speekify
 speekify setup
 ```
 
-`speekify setup` downloads and warms the Supertonic model and, by default, the English to French translation model too.
+`speekify setup` downloads and warms the Supertonic model, the CardiffNLP emotion/sentiment model used by default speech tagging, and, by default, the English to French translation model too.
 
 ### From source with uv
 
@@ -79,13 +79,21 @@ uv run speekify --title my-article --output-dir ~/Desktop "Hello world"
 speekify --voice F2 "Hello world"
 uv run speekify --voice F2 "Hello world"
 
+# Use a Supertonic Voice Builder JSON style
+speekify --custom-style-path ~/voices/my-voice.json "Hello world"
+uv run speekify --custom-style-path ~/voices/my-voice.json "Hello world"
+
 # Adjust speed and synthesis steps
 speekify --speed 1.2 --steps 20 "Hello world"
 uv run speekify --speed 1.2 --steps 20 "Hello world"
 
-# Control sparse inline speech tags
+# Tune natural narration pauses and internal chunking
+speekify --lang fr --voice M5 --speed 0.98 --steps 10 --silence-duration 0.25 https://example.com/article
+uv run speekify --max-chunk-length 240 --silence-duration 0.25 "Hello world"
+
+# Control sparse inline speech tags and emotion tagging
 speekify --no-tags "Hello world"
-uv run speekify --tag-sentiment --tag-sigh --lang fr https://example.com/article
+uv run speekify --no-tag-sentiment --no-tag-sigh --lang fr https://example.com/article
 
 # Download and warm up models
 speekify setup
@@ -93,6 +101,9 @@ uv run speekify setup
 
 speekify setup --skip-translation   # skip the EN→FR translation model
 uv run speekify setup --skip-translation
+
+speekify setup --skip-sentiment     # skip the emotion/sentiment model
+uv run speekify setup --skip-sentiment
 
 # Show technical diagnostics when needed
 speekify --verbose "Hello world"
@@ -113,14 +124,17 @@ uv run speekify setup --help
 | `source` | *(stdin if piped)* | Text to synthesize or a URL to extract. Required unless stdin is piped. |
 | `--lang CODE` | `en` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, `zh`, and more. Use `na` for language-agnostic synthesis. |
 | `--voice NAME` | `M1` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
+| `--custom-style-path PATH` | — | Load a Supertonic voice-style JSON file, such as a Voice Builder export. Overrides `--voice`. |
 | `--speed VALUE` | `1.05` | Playback speed multiplier (`0.7`–`2.0`). |
 | `--steps N` | `8` | Number of synthesis steps (`1`–`100`). Higher values may improve quality. |
+| `--max-chunk-length N` | *(auto)* | Maximum characters per internal Supertonic chunk. Leave unset for Supertonic's language-aware default. |
+| `--silence-duration SECONDS` | `0.3` | Silence between Supertonic chunks. Smaller values can make long-form narration feel tighter. |
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
 | `--tags / --no-tags` | `--tags` | Add sparse Supertonic inline speech tags, mainly `<breath>`. |
-| `--tag-sentiment` | disabled | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
-| `--tag-sigh` | disabled | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
+| `--tag-sentiment / --no-tag-sentiment` | `--tag-sentiment` | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
+| `--tag-sigh / --no-tag-sigh` | `--tag-sigh` | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
 | `--verbose` | disabled | Show technical diagnostics such as the log file path when a command fails. |
 
 By default, direct CLI generation writes the WAV file into the current working directory, with names like:
@@ -150,12 +164,13 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - The app uses `supertonic-3` by default.
 - The direct CLI defaults to English synthesis (`en`) and accepts only Supertonic-supported ISO 639-1 language codes such as `en`, `fr`, `ja` or `ko`, plus `na` for language-agnostic synthesis.
 - When `--lang fr` is used, English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
-- Speech tagging runs after optional translation and before audio chunking, so tags apply to the final TTS text. Rules-only tagging works without Hugging Face sentiment models.
-- `<breath>` is the primary inline tag. `<sigh>` is disabled by default and remains capped even when enabled.
+- Speech tagging runs after optional translation and before synthesis, so tags apply to the final TTS text. By default it combines rules-based `<breath>` placement with CardiffNLP sentiment and rare `<sigh>` tags. Use `--no-tag-sentiment --no-tag-sigh` for rules-only tagging.
+- `speekify setup` warms the CardiffNLP sentiment model used by the default emotion tagging. Use `setup --skip-sentiment` only if you want to skip that download during setup.
+- `<breath>` is the primary inline tag. `<sigh>` is enabled by default but remains rare and capped.
 - URL mode extracts readable body text rather than raw HTML.
 - A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.
 - Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
-- Very large inputs are split into external batches automatically and merged into one final WAV file.
+- Supertonic handles normal long-text chunking internally. Very large inputs above the SDK text limit are split into external batches automatically and merged into one final WAV file.
 - The steps control follows the SDK range `1..100`, with `8` as the default.
 - If generation fails, the terminal shows a short user-focused error. Add `--verbose` to include the technical log path (`logs/speekify.log`).
 - Each CLI run maintains `logs/speekify.log` automatically and prunes log entries older than 14 days at startup.

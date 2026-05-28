@@ -147,21 +147,25 @@ class SupertonicSynthesizer:
         text: str,
         output_path: Path,
         voice: str,
+        voice_style_path: Path | None = None,
         lang: str,
         steps: int,
         speed: float,
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
+        max_chunk_length: int | None = None,
     ) -> SynthesisArtifact:
         prepared_text = self.prepare_text(text)
         artifact = self.synthesize_prepared_text(
             prepared_text=prepared_text,
             voice=voice,
+            voice_style_path=voice_style_path,
             lang=lang,
             steps=steps,
             speed=speed,
             silence_duration=silence_duration,
             max_batch_length=max_batch_length,
+            max_chunk_length=max_chunk_length,
         )
         self.save_audio(artifact.wav, output_path)
         return artifact
@@ -171,20 +175,24 @@ class SupertonicSynthesizer:
         *,
         text: str,
         voice: str,
+        voice_style_path: Path | None = None,
         lang: str,
         steps: int,
         speed: float,
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
+        max_chunk_length: int | None = None,
     ) -> tuple[Any, float]:
         artifact = self.synthesize_prepared_text(
             prepared_text=self.prepare_text(text),
             voice=voice,
+            voice_style_path=voice_style_path,
             lang=lang,
             steps=steps,
             speed=speed,
             silence_duration=silence_duration,
             max_batch_length=max_batch_length,
+            max_chunk_length=max_chunk_length,
         )
         return artifact.wav, artifact.duration_seconds
 
@@ -193,21 +201,22 @@ class SupertonicSynthesizer:
         *,
         prepared_text: PreparedText,
         voice: str,
+        voice_style_path: Path | None = None,
         lang: str,
         steps: int,
         speed: float,
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
+        max_chunk_length: int | None = None,
     ) -> SynthesisArtifact:
         normalized_lang = self.validate_language_code(lang)
         engine = self.engine
-        style = engine.get_voice_style(voice)
-        max_chunk_length = self._default_chunk_length(normalized_lang)
+        style = self._resolve_voice_style(engine, voice=voice, voice_style_path=voice_style_path)
+        synthesize_chunk_length = max_chunk_length or self._default_chunk_length(normalized_lang)
         accepts_max_chunk_length = self._engine_accepts_max_chunk_length(engine)
         batches = self.split_text_into_batches(
             prepared_text.text,
             max_batch_length=max_batch_length,
-            preferred_chunk_length=max_chunk_length,
         )
 
         wav_list: list[np.ndarray] = []
@@ -222,7 +231,7 @@ class SupertonicSynthesizer:
                 "silence_duration": silence_duration,
             }
             if accepts_max_chunk_length:
-                synthesize_kwargs["max_chunk_length"] = max_chunk_length
+                synthesize_kwargs["max_chunk_length"] = synthesize_chunk_length
             wav, duration = engine.synthesize(batch, **synthesize_kwargs)
             wav_list.append(wav)
             duration_seconds += self._duration_to_float(duration)
@@ -268,6 +277,17 @@ class SupertonicSynthesizer:
     @property
     def _text_processor(self) -> Any | None:
         return getattr(getattr(self.engine, "model", None), "text_processor", None)
+
+    def _resolve_voice_style(
+        self,
+        engine: Any,
+        *,
+        voice: str,
+        voice_style_path: Path | None,
+    ) -> Any:
+        if voice_style_path is not None:
+            return engine.get_voice_style_from_path(str(voice_style_path.expanduser()))
+        return engine.get_voice_style(voice)
 
     def _default_chunk_length(self, lang: str) -> int:
         if lang == "ko":

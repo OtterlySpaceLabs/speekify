@@ -51,6 +51,9 @@ class InlineBreathTagger:
 
 
 class PermissiveSuccessSynthesizer:
+    def __init__(self) -> None:
+        self.synthesis_calls: list[dict[str, object]] = []
+
     @property
     def engine(self) -> str:
         return "ready"
@@ -69,16 +72,29 @@ class PermissiveSuccessSynthesizer:
         *,
         prepared_text: PreparedText,
         voice: str,
+        voice_style_path: Path | None,
         lang: str,
         steps: int,
         speed: float,
         silence_duration: float,
+        max_chunk_length: int | None,
     ) -> SynthesisArtifact:
+        self.synthesis_calls.append(
+            {
+                "prepared_text": prepared_text.text,
+                "voice": voice,
+                "voice_style_path": voice_style_path,
+                "lang": lang,
+                "steps": steps,
+                "speed": speed,
+                "silence_duration": silence_duration,
+                "max_chunk_length": max_chunk_length,
+            }
+        )
         assert voice == "M1"
         assert lang == "fr"
         assert steps == 8
         assert speed == 1.05
-        assert silence_duration == 0.3
         return SynthesisArtifact(
             wav="wav",
             duration_seconds=2.5,
@@ -173,6 +189,7 @@ def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
 
 def test_generate_audio_applies_tags_after_preparing_text(tmp_path) -> None:
     tagger = InlineBreathTagger()
+    synthesizer = PermissiveSuccessSynthesizer()
 
     result = asyncio.run(
         generate_audio(
@@ -184,7 +201,7 @@ def test_generate_audio_applies_tags_after_preparing_text(tmp_path) -> None:
                 steps=8,
                 output_dir=tmp_path,
             ),
-            synthesizer=PermissiveSuccessSynthesizer(),
+            synthesizer=synthesizer,
             translator=NoopTranslator(),
             tagger=tagger,
             logger=logging.getLogger("speekify.tests.workflow"),
@@ -193,3 +210,42 @@ def test_generate_audio_applies_tags_after_preparing_text(tmp_path) -> None:
 
     assert tagger.calls == [("Bonjour monde.", "fr")]
     assert result.artifact.prepared_text.text == "Bonjour monde. <breath>"
+    assert synthesizer.synthesis_calls[0]["prepared_text"] == "Bonjour monde. <breath>"
+
+
+def test_generate_audio_passes_supertonic_options(tmp_path) -> None:
+    voice_style_path = tmp_path / "voice.json"
+    voice_style_path.write_text("{}", encoding="utf-8")
+    synthesizer = PermissiveSuccessSynthesizer()
+
+    asyncio.run(
+        generate_audio(
+            GenerationRequest(
+                source_text="Bonjour 😀 monde",
+                voice="M1",
+                voice_style_path=voice_style_path,
+                language_code="fr",
+                speed=1.05,
+                steps=8,
+                max_chunk_length=240,
+                silence_duration=0.2,
+                output_dir=tmp_path,
+            ),
+            synthesizer=synthesizer,
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert synthesizer.synthesis_calls == [
+        {
+            "prepared_text": "Bonjour monde.",
+            "voice": "M1",
+            "voice_style_path": voice_style_path,
+            "lang": "fr",
+            "steps": 8,
+            "speed": 1.05,
+            "silence_duration": 0.2,
+            "max_chunk_length": 240,
+        }
+    ]

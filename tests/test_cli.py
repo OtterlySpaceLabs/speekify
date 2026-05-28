@@ -95,6 +95,139 @@ def test_main_passes_explicit_language_code(tmp_path, monkeypatch, capsys) -> No
     assert str(tmp_path / "fr.wav") in stdout
 
 
+def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    voice_style_path = tmp_path / "voice.json"
+    voice_style_path.write_text("{}", encoding="utf-8")
+
+    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+        assert request.voice_style_path == voice_style_path
+        assert request.max_chunk_length == 240
+        assert request.silence_duration == 0.2
+        return GenerationResult(
+            output_path=tmp_path / "options.wav",
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=0.5,
+                batch_count=1,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text=request.source_text,
+                    reformatted=False,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text=request.source_text),
+        )
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+
+    exit_code = main([
+        "--custom-style-path",
+        str(voice_style_path),
+        "--max-chunk-length",
+        "240",
+        "--silence-duration",
+        "0.2",
+        "Hello",
+    ])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert str(tmp_path / "options.wav") in stdout
+
+
+def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    fake_tagger = object()
+
+    def fake_build_tagger(tagging_config: object) -> object:
+        assert getattr(tagging_config, "enabled") is True
+        assert getattr(tagging_config, "use_sentiment") is True
+        assert getattr(tagging_config, "enable_sigh") is True
+        return fake_tagger
+
+    async def fake_generate_audio(request, **kwargs: object) -> GenerationResult:
+        assert request.tagging_config.enabled is True
+        assert request.tagging_config.use_sentiment is True
+        assert request.tagging_config.enable_sigh is True
+        assert kwargs["tagger"] is fake_tagger
+        return GenerationResult(
+            output_path=tmp_path / "emotion-tags.wav",
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=0.5,
+                batch_count=1,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text=request.source_text,
+                    reformatted=False,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text=request.source_text),
+        )
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_tagger", fake_build_tagger)
+
+    exit_code = main(["Hello"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert str(tmp_path / "emotion-tags.wav") in stdout
+
+
+def test_main_can_keep_simple_tag_rules_without_emotion(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    fake_tagger = object()
+
+    def fake_build_tagger(tagging_config: object) -> object:
+        assert getattr(tagging_config, "enabled") is True
+        assert getattr(tagging_config, "use_sentiment") is False
+        assert getattr(tagging_config, "enable_sigh") is False
+        return fake_tagger
+
+    async def fake_generate_audio(request, **kwargs: object) -> GenerationResult:
+        assert request.tagging_config.enabled is True
+        assert request.tagging_config.use_sentiment is False
+        assert request.tagging_config.enable_sigh is False
+        assert kwargs["tagger"] is fake_tagger
+        return GenerationResult(
+            output_path=tmp_path / "simple-tags.wav",
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=0.5,
+                batch_count=1,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text=request.source_text,
+                    reformatted=False,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text=request.source_text),
+        )
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_tagger", fake_build_tagger)
+
+    exit_code = main(["--no-tag-sentiment", "--no-tag-sigh", "Hello"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert str(tmp_path / "simple-tags.wav") in stdout
+
+
 def test_main_passes_disabled_tagging_config(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
     fake_tagger = object()
@@ -288,38 +421,62 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
     assert str(tmp_path / "stdin.wav") in stdout
 
 
-def test_main_setup_warms_supertonic_and_translation(monkeypatch, capsys) -> None:
-    warmed: list[bool] = []
+def test_main_setup_warms_supertonic_translation_and_sentiment(monkeypatch, capsys) -> None:
+    warmed: list[tuple[bool, bool]] = []
 
     def fake_warm_up_models(**kwargs: object) -> None:
-        warmed.append(bool(kwargs["include_translation"]))
+        warmed.append((bool(kwargs["include_translation"]), bool(kwargs["include_sentiment"])))
 
     monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
     monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_sentiment_analyzer", object)
     monkeypatch.setattr("speekify.__main__._warm_up_models", fake_warm_up_models)
 
     exit_code = main(["setup"])
     stdout = capsys.readouterr().out
 
     assert exit_code == 0
-    assert warmed == [True]
+    assert warmed == [(True, True)]
     assert "Supertonic model ready." in stdout
     assert "Translation model ready." in stdout
+    assert "Emotion model ready." in stdout
 
 
 def test_main_setup_can_skip_translation(monkeypatch, capsys) -> None:
-    warmed: list[bool] = []
+    warmed: list[tuple[bool, bool]] = []
 
     def fake_warm_up_models(**kwargs: object) -> None:
-        warmed.append(bool(kwargs["include_translation"]))
+        warmed.append((bool(kwargs["include_translation"]), bool(kwargs["include_sentiment"])))
 
     monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
     monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_sentiment_analyzer", object)
     monkeypatch.setattr("speekify.__main__._warm_up_models", fake_warm_up_models)
 
     exit_code = main(["setup", "--skip-translation"])
     stdout = capsys.readouterr().out
 
     assert exit_code == 0
-    assert warmed == [False]
+    assert warmed == [(False, True)]
     assert "Translation model skipped." in stdout
+    assert "Emotion model ready." in stdout
+
+
+def test_main_setup_can_skip_sentiment(monkeypatch, capsys) -> None:
+    warmed: list[tuple[bool, bool]] = []
+
+    def fake_warm_up_models(**kwargs: object) -> None:
+        warmed.append((bool(kwargs["include_translation"]), bool(kwargs["include_sentiment"])))
+
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_sentiment_analyzer", object)
+    monkeypatch.setattr("speekify.__main__._warm_up_models", fake_warm_up_models)
+
+    exit_code = main(["setup", "--skip-sentiment"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert warmed == [(True, False)]
+    assert "Translation model ready." in stdout
+    assert "Emotion model skipped." in stdout

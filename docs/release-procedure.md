@@ -19,7 +19,7 @@ Current production setup:
 ## Current distribution model
 
 - End users can run `speekify` directly from a standalone macOS binary.
-- The first-run model preparation is done with `speekify setup`.
+- The first-run model preparation is done with `speekify setup`, which warms Supertonic, CardiffNLP sentiment, and English-to-French translation by default.
 - Direct CLI generation writes WAV files to the current working directory unless `--output-dir` is provided.
 
 ## Prerequisites
@@ -203,6 +203,7 @@ brew tap OtterlySpaceLabs/speekify
 brew install speekify
 speekify --help
 speekify setup --skip-translation
+speekify --no-tag-sentiment --no-tag-sigh "Hello from brew"
 speekify "Hello from brew"
 ```
 
@@ -213,13 +214,14 @@ curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify
 tar -xzf speekify.tar.gz
 ./speekify --help
 ./speekify setup --skip-translation
+./speekify --no-tag-sentiment --no-tag-sigh "Hello from archive"
 ./speekify "Hello from archive"
 ```
 
 Expected result:
 
 - the binary starts without Python installed separately
-- `speekify setup` warms the models
+- `speekify setup` warms the Supertonic, sentiment, and translation models by default
 - direct generation creates a WAV in the current directory
 
 ## Optional local build workflow

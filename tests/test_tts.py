@@ -11,9 +11,14 @@ class FakeTTS:
         self.model = model
         self.saved: tuple[object, str] | None = None
         self.sample_rate = 10
+        self.custom_style_path: str | None = None
 
     def get_voice_style(self, voice: str) -> str:
         return f"style:{voice}"
+
+    def get_voice_style_from_path(self, voice_style_path: str) -> str:
+        self.custom_style_path = voice_style_path
+        return "style:custom"
 
     def synthesize(
         self,
@@ -26,7 +31,7 @@ class FakeTTS:
         silence_duration: float,
     ) -> tuple[list[float], list[float]]:
         assert text == "Bonjour"
-        assert voice_style == "style:M1"
+        assert voice_style in {"style:M1", "style:custom"}
         assert lang == "fr"
         assert total_steps == 8
         assert speed == 1.05
@@ -89,6 +94,29 @@ def test_synthesizer_saves_audio(tmp_path) -> None:
     assert wav.shape == (1, 2)
 
 
+def test_synthesizer_loads_custom_voice_style_path(tmp_path) -> None:
+    fake = FakeTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    output = tmp_path / "custom.wav"
+    voice_style_path = tmp_path / "voice.json"
+    voice_style_path.write_text("{}", encoding="utf-8")
+
+    artifact = synth.synthesize_to_file(
+        text="Bonjour",
+        output_path=output,
+        voice="M1",
+        voice_style_path=voice_style_path,
+        lang="fr",
+        steps=8,
+        speed=1.05,
+        silence_duration=0.3,
+    )
+
+    assert artifact.batch_count == 1
+    assert fake.custom_style_path == str(voice_style_path)
+    assert output.read_bytes() == b"wav"
+
+
 def test_synthesizer_removes_unsupported_characters_permissively() -> None:
     fake = FakeTTSWithValidation(
         model="supertonic-3",
@@ -124,6 +152,7 @@ class FakeBatchingTTS:
         self.model = FakePermissiveModel()
         self.sample_rate = 10
         self.calls: list[str] = []
+        self.max_chunk_lengths: list[int | None] = []
 
     def get_voice_style(self, voice: str) -> str:
         return f"style:{voice}"
@@ -142,6 +171,7 @@ class FakeBatchingTTS:
         assert voice_style == "style:M1"
         assert lang == "fr"
         self.calls.append(text)
+        self.max_chunk_lengths.append(max_chunk_length)
         wav = np.ones((1, len(text)), dtype=np.float32)
         duration = np.array([len(text) / 10], dtype=np.float32)
         return wav, duration
@@ -202,6 +232,7 @@ def test_synthesizer_uses_language_chunk_limit_for_single_long_sentence(tmp_path
         silence_duration=0.3,
     )
 
-    assert artifact.batch_count > 1
-    assert all(len(call) <= 300 for call in fake.calls)
+    assert artifact.batch_count == 1
+    assert fake.calls == [text]
+    assert fake.max_chunk_lengths == [300]
     assert output.read_bytes() == b"wav"

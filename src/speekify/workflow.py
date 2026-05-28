@@ -30,6 +30,9 @@ class GenerationRequest:
     language_code: str
     speed: float
     steps: int
+    voice_style_path: Path | None = None
+    max_chunk_length: int | None = None
+    silence_duration: float = DEFAULT_SILENCE_DURATION
     tagging_config: TaggingConfig = field(default_factory=TaggingConfig)
     title: str = ""
     is_url_mode: bool = False
@@ -128,12 +131,15 @@ async def generate_audio(
     status_callback: StatusCallback | None = None,
 ) -> GenerationResult:
     logger.info(
-        "Generation started mode=%s voice=%s language=%s steps=%s speed=%s title_supplied=%s text_length=%s",
+        "Generation started mode=%s voice=%s custom_style=%s language=%s steps=%s speed=%s max_chunk_length=%s silence_duration=%s title_supplied=%s text_length=%s",
         "url" if request.is_url_mode else "text",
         request.voice,
+        bool(request.voice_style_path),
         request.language_code,
         request.steps,
         request.speed,
+        request.max_chunk_length,
+        request.silence_duration,
         bool(request.title),
         len(request.source_text.strip()),
     )
@@ -144,6 +150,12 @@ async def generate_audio(
         raise ValueError(
             f"Steps must be between {MIN_STEPS} and {MAX_STEPS}."
         )
+    if request.max_chunk_length is not None and request.max_chunk_length < 10:
+        raise ValueError("Maximum chunk length must be at least 10 characters.")
+    if request.silence_duration < 0:
+        raise ValueError("Silence duration cannot be negative.")
+    if request.voice_style_path is not None and not request.voice_style_path.expanduser().is_file():
+        raise ValueError(f"Custom voice style file does not exist: {request.voice_style_path}")
 
     content = await resolve_content(
         request.source_text,
@@ -203,10 +215,12 @@ async def generate_audio(
         synthesizer.synthesize_prepared_text,
         prepared_text=prepared_text,
         voice=request.voice,
+        voice_style_path=request.voice_style_path,
         lang=request.language_code,
         steps=request.steps,
         speed=request.speed,
-        silence_duration=DEFAULT_SILENCE_DURATION,
+        silence_duration=request.silence_duration,
+        max_chunk_length=request.max_chunk_length,
     )
     logger.info(
         "Synthesis finished duration=%.2fs batch_count=%s",

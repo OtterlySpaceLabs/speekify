@@ -15,6 +15,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from rich.table import Table
 
 from speekify.config import (
+    DEFAULT_SILENCE_DURATION,
     DEFAULT_SPEED,
     DEFAULT_STEPS,
     DEFAULT_TTS_LANG,
@@ -93,6 +94,13 @@ VoiceOption = Annotated[
     str,
     typer.Option("--voice", callback=_parse_voice_name, help="Supertonic voice: M1-M5 or F1-F5."),
 ]
+CustomStylePathOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--custom-style-path",
+        help="Path to a Supertonic voice-style JSON file. Overrides --voice.",
+    ),
+]
 LanguageOption = Annotated[
     str,
     typer.Option(
@@ -119,6 +127,22 @@ StepsOption = Annotated[
         help=f"Synthesis steps ({MIN_STEPS}-{MAX_STEPS}). Higher can improve quality.",
     ),
 ]
+MaxChunkLengthOption = Annotated[
+    int | None,
+    typer.Option(
+        "--max-chunk-length",
+        min=10,
+        help="Maximum characters per internal Supertonic chunk. Defaults to language auto.",
+    ),
+]
+SilenceDurationOption = Annotated[
+    float,
+    typer.Option(
+        "--silence-duration",
+        min=0.0,
+        help="Silence between Supertonic chunks in seconds.",
+    ),
+]
 OutputDirOption = Annotated[
     Path | None,
     typer.Option("--output-dir", help="Directory where the WAV file is written."),
@@ -137,14 +161,14 @@ TagsOption = Annotated[
 TagSentimentOption = Annotated[
     bool,
     typer.Option(
-        "--tag-sentiment",
-        help="Use optional CardiffNLP sentiment signals when placing speech tags.",
+        "--tag-sentiment/--no-tag-sentiment",
+        help="Use CardiffNLP sentiment signals when placing speech tags.",
     ),
 ]
 TagSighOption = Annotated[
     bool,
     typer.Option(
-        "--tag-sigh",
+        "--tag-sigh/--no-tag-sigh",
         help="Allow very rare <sigh> tags when sentiment and rules strongly agree.",
     ),
 ]
@@ -153,6 +177,13 @@ SkipTranslationOption = Annotated[
     typer.Option(
         "--skip-translation",
         help="Do not warm up the English-to-French translation model.",
+    ),
+]
+SkipSentimentOption = Annotated[
+    bool,
+    typer.Option(
+        "--skip-sentiment",
+        help="Do not warm up the CardiffNLP emotion/sentiment model.",
     ),
 ]
 
@@ -176,13 +207,16 @@ def generation_command(
     url: UrlOption = False,
     title: TitleOption = "",
     voice: VoiceOption = DEFAULT_VOICE,
+    custom_style_path: CustomStylePathOption = None,
     language_code: LanguageOption = DEFAULT_TTS_LANG,
     speed: SpeedOption = DEFAULT_SPEED,
     steps: StepsOption = DEFAULT_STEPS,
+    max_chunk_length: MaxChunkLengthOption = None,
+    silence_duration: SilenceDurationOption = DEFAULT_SILENCE_DURATION,
     output_dir: OutputDirOption = None,
     tags: TagsOption = True,
-    tag_sentiment: TagSentimentOption = False,
-    tag_sigh: TagSighOption = False,
+    tag_sentiment: TagSentimentOption = True,
+    tag_sigh: TagSighOption = True,
     verbose: VerboseOption = False,
 ) -> int:
     return _run_generation(
@@ -190,9 +224,12 @@ def generation_command(
         is_url_mode=url,
         title=title,
         voice=voice,
+        custom_style_path=custom_style_path,
         language_code=language_code,
         speed=speed,
         steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
         output_dir=output_dir,
         tags=tags,
         tag_sentiment=tag_sentiment,
@@ -204,9 +241,14 @@ def generation_command(
 @setup_app.command(help=SETUP_HELP)
 def setup_command(
     skip_translation: SkipTranslationOption = False,
+    skip_sentiment: SkipSentimentOption = False,
     verbose: VerboseOption = False,
 ) -> int:
-    return _run_setup(skip_translation=skip_translation, verbose=verbose)
+    return _run_setup(
+        skip_translation=skip_translation,
+        skip_sentiment=skip_sentiment,
+        verbose=verbose,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -240,9 +282,12 @@ def _run_generation(
     is_url_mode: bool,
     title: str,
     voice: str,
+    custom_style_path: Path | None,
     language_code: str,
     speed: float,
     steps: int,
+    max_chunk_length: int | None,
+    silence_duration: float,
     output_dir: Path | None,
     tags: bool,
     tag_sentiment: bool,
@@ -274,9 +319,12 @@ def _run_generation(
                     _build_generation_request(
                         source_text=source_text,
                         voice=voice,
+                        voice_style_path=custom_style_path,
                         language_code=language_code,
                         speed=speed,
                         steps=steps,
+                        max_chunk_length=max_chunk_length,
+                        silence_duration=silence_duration,
                         title=title.strip(),
                         is_url_mode=is_url_mode,
                         output_dir=output_dir or Path.cwd(),
@@ -298,17 +346,21 @@ def _run_generation(
     return 0
 
 
-def _run_setup(*, skip_translation: bool, verbose: bool) -> int:
+def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -> int:
     logger, log_path = configure_logger(verbose=verbose)
     synthesizer = _build_synthesizer()
     translator = _build_translator()
+    sentiment_analyzer = _build_sentiment_analyzer()
     include_translation = not skip_translation
+    include_sentiment = not skip_sentiment
 
     try:
         _warm_up_models(
             synthesizer=synthesizer,
             translator=translator,
+            sentiment_analyzer=sentiment_analyzer,
             include_translation=include_translation,
+            include_sentiment=include_sentiment,
             logger=logger,
         )
     except Exception as exc:
@@ -316,7 +368,11 @@ def _run_setup(*, skip_translation: bool, verbose: bool) -> int:
         _render_runtime_error(exc, log_path=log_path, verbose=verbose)
         return 1
 
-    _render_setup_success(include_translation=include_translation, log_path=log_path if verbose else None)
+    _render_setup_success(
+        include_translation=include_translation,
+        include_sentiment=include_sentiment,
+        log_path=log_path if verbose else None,
+    )
     return 0
 
 
@@ -330,6 +386,12 @@ def _build_translator() -> object:
     from speekify.translation import HuggingFaceTranslator
 
     return HuggingFaceTranslator()
+
+
+def _build_sentiment_analyzer() -> object:
+    from speekify.tagging.cardiff import CardiffSentimentAnalyzer
+
+    return CardiffSentimentAnalyzer()
 
 
 def _build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bool) -> object:
@@ -368,15 +430,23 @@ def _warm_up_models(
     *,
     synthesizer: object,
     translator: object,
+    sentiment_analyzer: object,
     include_translation: bool,
+    include_sentiment: bool,
     logger: logging.Logger,
 ) -> None:
-    logger.info("Warmup started include_translation=%s", include_translation)
+    logger.info(
+        "Warmup started include_translation=%s include_sentiment=%s",
+        include_translation,
+        include_sentiment,
+    )
     warmups: list[tuple[str, Callable[[], object]]] = [
         ("Supertonic model", lambda: getattr(synthesizer, "engine")),
     ]
     if include_translation:
         warmups.append(("Translation model", lambda: getattr(translator, "backend")))
+    if include_sentiment:
+        warmups.append(("Emotion model", lambda: getattr(sentiment_analyzer, "backend")))
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -392,7 +462,11 @@ def _warm_up_models(
             load_model()
             progress.advance(task_id)
 
-    logger.info("Warmup finished include_translation=%s", include_translation)
+    logger.info(
+        "Warmup finished include_translation=%s include_sentiment=%s",
+        include_translation,
+        include_sentiment,
+    )
 
 
 def _read_source(source_parts: Sequence[str] | None) -> str | None:
@@ -496,12 +570,18 @@ def _render_generation_success(generation: Any, *, log_path: Path | None) -> Non
     _render_warnings(generation.artifact.summary_notes())
 
 
-def _render_setup_success(*, include_translation: bool, log_path: Path | None) -> None:
+def _render_setup_success(
+    *,
+    include_translation: bool,
+    include_sentiment: bool,
+    log_path: Path | None,
+) -> None:
     table = Table(show_header=False, box=box.SIMPLE, expand=False)
     table.add_column("Model", style="bold")
     table.add_column("Status")
     table.add_row("Supertonic model", "ready")
     table.add_row("Translation model", "ready" if include_translation else "skipped")
+    table.add_row("Emotion model", "ready" if include_sentiment else "skipped")
     if log_path is not None:
         table.add_row("Log", str(log_path))
 
@@ -519,6 +599,10 @@ def _render_setup_success(*, include_translation: bool, log_path: Path | None) -
         console.print("Translation model ready.", style="green")
     else:
         console.print("Translation model skipped.", style="yellow")
+    if include_sentiment:
+        console.print("Emotion model ready.", style="green")
+    else:
+        console.print("Emotion model skipped.", style="yellow")
 
 
 def _render_warnings(notes: Sequence[str]) -> None:
