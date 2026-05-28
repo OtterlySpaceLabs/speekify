@@ -20,6 +20,7 @@ speekify = "speekify.__main__:main"
 
 [dependency-groups]
 dev = [
+  "pyinstaller>=6.16",
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
   "ruff>=0.6",

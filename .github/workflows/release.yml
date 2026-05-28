@@ -1,0 +1,38 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos-standalone:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pip uv pyinstaller
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Run focused tests
+        run: uv run pytest tests/test_cli.py tests/test_app_logging.py
+
+      - name: Build standalone archive
+        run: ./scripts/build_standalone_macos.sh
+
+      - name: Publish release archive
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/speekify-macos-*.tar.gz

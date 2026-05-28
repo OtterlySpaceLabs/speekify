@@ -1,0 +1,197 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+from speekify.config import (
+    DEFAULT_TRANSLATION_TARGET_LANG,
+    DEFAULT_SILENCE_DURATION,
+    MAX_SPEED,
+    MAX_STEPS,
+    MIN_SPEED,
+    MIN_STEPS,
+)
+from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
+from speekify.naming import build_output_path
+from speekify.tts import SynthesisArtifact, SupertonicSynthesizer
+from speekify.translation import HuggingFaceTranslator
+
+StatusCallback = Callable[[str], None]
+
+
+@dataclass(frozen=True)
+class GenerationRequest:
+    source_text: str
+    voice: str
+    language_code: str
+    speed: float
+    steps: int
+    title: str = ""
+    is_url_mode: bool = False
+    output_dir: Path = Path.cwd()
+
+
+@dataclass(frozen=True)
+class GenerationResult:
+    output_path: Path
+    artifact: SynthesisArtifact
+    content: ExtractedContent
+
+
+def _update_status(status_callback: StatusCallback | None, message: str) -> None:
+    if status_callback is not None:
+        status_callback(message)
+
+
+async def resolve_content(
+    raw_input: str,
+    *,
+    is_url_mode: bool,
+    target_language: str,
+    translator: HuggingFaceTranslator,
+    logger: logging.Logger,
+    status_callback: StatusCallback | None = None,
+) -> ExtractedContent:
+    should_extract_url = is_url_mode or is_single_url_input(raw_input)
+
+    if should_extract_url:
+        _update_status(status_callback, "extracting URL")
+        extracted = await extract_url(raw_input)
+        logger.info(
+            "URL extracted title=%r text_length=%s autodetected=%s",
+            extracted.title,
+            len(extracted.text),
+            not is_url_mode,
+        )
+        return await translate_content_if_needed(
+            extracted,
+            target_language=target_language,
+            translator=translator,
+            logger=logger,
+            status_callback=status_callback,
+        )
+
+    normalized_text = normalize_text(raw_input)
+    if not normalized_text:
+        raise ValueError("Le texte ne peut pas etre vide.")
+    logger.info("Text normalized text_length=%s", len(normalized_text))
+    return await translate_content_if_needed(
+        ExtractedContent(text=normalized_text),
+        target_language=target_language,
+        translator=translator,
+        logger=logger,
+        status_callback=status_callback,
+    )
+
+
+async def translate_content_if_needed(
+    content: ExtractedContent,
+    *,
+    target_language: str,
+    translator: HuggingFaceTranslator,
+    logger: logging.Logger,
+    status_callback: StatusCallback | None = None,
+) -> ExtractedContent:
+    if target_language != DEFAULT_TRANSLATION_TARGET_LANG:
+        logger.info("Translation skipped target_language=%r", target_language)
+        return content
+
+    _update_status(status_callback, "checking language")
+    translation = await asyncio.to_thread(translator.maybe_translate_to_french, content.text)
+    logger.info(
+        "Translation checked source_language=%r translated=%s original_length=%s translated_length=%s",
+        translation.source_language,
+        translation.translated,
+        len(content.text),
+        len(translation.text),
+    )
+
+    if not translation.translated:
+        return content
+
+    _update_status(status_callback, "translating to French")
+    return ExtractedContent(text=translation.text, title=content.title)
+
+
+async def generate_audio(
+    request: GenerationRequest,
+    *,
+    synthesizer: SupertonicSynthesizer,
+    translator: HuggingFaceTranslator,
+    logger: logging.Logger,
+    status_callback: StatusCallback | None = None,
+) -> GenerationResult:
+    logger.info(
+        "Generation started mode=%s voice=%s language=%s steps=%s speed=%s title_supplied=%s text_length=%s",
+        "url" if request.is_url_mode else "text",
+        request.voice,
+        request.language_code,
+        request.steps,
+        request.speed,
+        bool(request.title),
+        len(request.source_text.strip()),
+    )
+
+    if not MIN_SPEED <= request.speed <= MAX_SPEED:
+        raise ValueError(f"La vitesse doit etre comprise entre {MIN_SPEED} et {MAX_SPEED}.")
+    if not MIN_STEPS <= request.steps <= MAX_STEPS:
+        raise ValueError(
+            f"Le nombre de steps doit etre compris entre {MIN_STEPS} et {MAX_STEPS}."
+        )
+
+    content = await resolve_content(
+        request.source_text,
+        is_url_mode=request.is_url_mode,
+        target_language=request.language_code,
+        translator=translator,
+        logger=logger,
+        status_callback=status_callback,
+    )
+    _update_status(status_callback, "preparing text")
+    prepared_text = await asyncio.to_thread(synthesizer.prepare_text, content.text)
+    logger.info(
+        "Prepared text original_length=%s cleaned_length=%s reformatted=%s removed_count=%s removed_chars=%s",
+        len(prepared_text.original_text),
+        len(prepared_text.text),
+        prepared_text.reformatted,
+        prepared_text.removed_character_count,
+        prepared_text.removed_characters,
+    )
+
+    output_title = request.title or content.best_title()
+    output_path = build_output_path(request.output_dir, output_title)
+    logger.info(
+        "Prepared output title=%r path=%s normalized_text_length=%s",
+        output_title,
+        output_path,
+        len(prepared_text.text),
+    )
+
+    _update_status(status_callback, "loading model")
+    await asyncio.to_thread(lambda: synthesizer.engine)
+    logger.info("Model loaded")
+
+    _update_status(status_callback, "synthesizing")
+    artifact = await asyncio.to_thread(
+        synthesizer.synthesize_prepared_text,
+        prepared_text=prepared_text,
+        voice=request.voice,
+        lang=request.language_code,
+        steps=request.steps,
+        speed=request.speed,
+        silence_duration=DEFAULT_SILENCE_DURATION,
+    )
+    logger.info(
+        "Synthesis finished duration=%.2fs batch_count=%s",
+        artifact.duration_seconds,
+        artifact.batch_count,
+    )
+
+    _update_status(status_callback, "saving")
+    await asyncio.to_thread(synthesizer.save_audio, artifact.wav, output_path)
+    logger.info("Audio saved path=%s", output_path)
+
+    return GenerationResult(output_path=output_path, artifact=artifact, content=content)

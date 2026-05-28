@@ -160,7 +160,7 @@ async def test_resolve_content_autodetects_single_url_input(tmp_path, monkeypatc
         captured["url"] = url
         return ExtractedContent(text="Contenu extrait", title="Article")
 
-    monkeypatch.setattr("speekify.app.extract_url", fake_extract_url)
+    monkeypatch.setattr("speekify.workflow.extract_url", fake_extract_url)
     app = SpeekifyApp(log_path=tmp_path / "speekify.log")
 
     async with app.run_test() as pilot:

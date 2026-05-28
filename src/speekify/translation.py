@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from speekify.config import (
-    DEFAULT_LANG,
+    DEFAULT_TRANSLATION_TARGET_LANG,
     TRANSLATION_CHUNK_SIZE,
     TRANSLATION_CHUNK_TOKEN_LIMIT,
     TRANSLATION_MODEL_NAME,
@@ -24,7 +24,7 @@ class TranslationResult:
     text: str
     translated: bool
     source_language: str | None
-    target_language: str = DEFAULT_LANG
+    target_language: str = DEFAULT_TRANSLATION_TARGET_LANG
     original_text: str | None = None
 
     @property
@@ -97,7 +97,7 @@ class HuggingFaceTranslator:
             from transformers.utils import logging as transformers_logging
         except ImportError as exc:  # pragma: no cover - only exercised when deps are missing.
             raise RuntimeError(
-                "La traduction n'est pas disponible. Lancez `uv sync` pour installer langdetect, torch et transformers."
+                "La traduction n'est pas disponible. Reinstallez Speekify avec ses dependances completes."
             ) from exc
 
         transformers_logging.disable_progress_bar()

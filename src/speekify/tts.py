@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from speekify.config import MODEL_NAME
+from speekify.config import MODEL_NAME, SUPPORTED_TTS_LANGUAGES
 
 try:
     from supertonic import TTS
@@ -74,7 +74,7 @@ class SupertonicSynthesizer:
         if self._engine is None:
             if TTS is None:
                 raise RuntimeError(
-                    "Le package supertonic n'est pas disponible. Lancez `uv sync`."
+                    "Le package supertonic n'est pas disponible. Reinstallez Speekify avec ses dependances completes."
                 )
             self._engine = TTS(model=MODEL_NAME)
         return self._engine
@@ -205,8 +205,9 @@ class SupertonicSynthesizer:
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
     ) -> SynthesisArtifact:
+        normalized_lang = self.validate_language_code(lang)
         style = self.engine.get_voice_style(voice)
-        max_chunk_length = self._default_chunk_length(lang)
+        max_chunk_length = self._default_chunk_length(normalized_lang)
         batches = self.split_text_into_batches(
             prepared_text.text,
             max_batch_length=max_batch_length,
@@ -219,7 +220,7 @@ class SupertonicSynthesizer:
         for batch in batches:
             synthesize_kwargs = {
                 "voice_style": style,
-                "lang": lang,
+                "lang": normalized_lang,
                 "total_steps": steps,
                 "speed": speed,
                 "silence_duration": silence_duration,
@@ -239,6 +240,15 @@ class SupertonicSynthesizer:
             batch_count=len(wav_list),
             prepared_text=prepared_text,
         )
+
+    def validate_language_code(self, lang: str) -> str:
+        normalized = lang.strip().lower()
+        if normalized not in SUPPORTED_TTS_LANGUAGES:
+            supported = ", ".join(SUPPORTED_TTS_LANGUAGES)
+            raise ValueError(
+                f"Langue TTS non supportee: {lang!r}. Langues disponibles: {supported}"
+            )
+        return normalized
 
     def save_audio(self, wav: Any, output_path: Path) -> None:
         self.engine.save_audio(wav, str(output_path))
