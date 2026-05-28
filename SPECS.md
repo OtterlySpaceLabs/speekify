@@ -32,7 +32,7 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 
 ```bash
 speekify "Hello world"
-speekify --lang fr "Bonjour tout le monde"
+speekify --lang fr "Hello world"
 speekify https://example.com/article
 printf 'Hello from stdin' | speekify
 speekify --title my-article --output-dir ~/Desktop "Hello world"

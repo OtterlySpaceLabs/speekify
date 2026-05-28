@@ -150,8 +150,8 @@ def test_generate_audio_returns_cleanup_and_batch_summary(tmp_path) -> None:
     assert result.artifact.duration_seconds == 2.5
     assert result.artifact.summary_notes() == [
         "batch auto: 3",
-        "texte reformate automatiquement",
-        "1 caractere(s) supprime(s): '😀'",
+        "text reformatted automatically",
+        "1 character(s) removed: '😀'",
     ]
     assert statuses == [
         "checking language",

@@ -203,7 +203,7 @@ brew tap OtterlySpaceLabs/speekify
 brew install speekify
 speekify --help
 speekify setup --skip-translation
-speekify "Bonjour depuis brew"
+speekify "Hello from brew"
 ```
 
 Direct archive path:
@@ -213,7 +213,7 @@ curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify
 tar -xzf speekify.tar.gz
 ./speekify --help
 ./speekify setup --skip-translation
-./speekify "Bonjour depuis l'archive"
+./speekify "Hello from archive"
 ```
 
 Expected result:
@@ -249,7 +249,7 @@ This script currently:
 - [ ] Homebrew formula is generated
 - [ ] Homebrew tap is updated
 - [ ] `speekify setup` works after install
-- [ ] `speekify "Bonjour"` writes a WAV in the current directory
+- [ ] `speekify "Hello"` writes a WAV in the current directory
 
 ## Known limitations
 

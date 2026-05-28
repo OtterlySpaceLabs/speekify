@@ -26,23 +26,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def render_formula(*, version: str, url: str, sha256: str, homepage: str) -> str:
-    return f'''class Speekify < Formula
-  desc "French text and URL to WAV converter powered by Supertonic v3"
-  homepage "{homepage}"
-  url "{url}"
-  sha256 "{sha256}"
-  version "{version}"
-
-  def install
-    bin.install "speekify"
-  end
-
-  test do
-    assert_match "Genere un fichier WAV", shell_output("#{{bin}}/speekify --help")
-    assert_match "Telecharge et prechauffe", shell_output("#{{bin}}/speekify setup --help")
-  end
-end
-'''
+    return (
+        "class Speekify < Formula\n"
+        '  desc "French text and URL to WAV converter powered by Supertonic v3"\n'
+        f'  homepage "{homepage}"\n'
+        f'  url "{url}"\n'
+        f'  sha256 "{sha256}"\n'
+        f'  version "{version}"\n'
+        "\n"
+        "  def install\n"
+        '    bin.install "speekify"\n'
+        "  end\n"
+        "\n"
+        "  test do\n"
+        '    assert_match "Generate a WAV file", shell_output("#{bin}/speekify --help")\n'
+        '    assert_match "Download and warm up", shell_output("#{bin}/speekify setup --help")\n'
+        "  end\n"
+        "end\n"
+    )
 
 
 def main() -> int:

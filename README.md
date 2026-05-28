@@ -55,8 +55,8 @@ All examples below work with the installed binary (`speekify …`) or directly f
 speekify "Hello world"
 uv run speekify "Hello world"
 
-speekify --lang fr "Bonjour tout le monde"
-uv run speekify --lang fr "Bonjour tout le monde"
+speekify --lang fr "Hello world"
+uv run speekify --lang fr "Hello world"
 
 # Generate from a URL (auto-detected or forced)
 speekify https://example.com/article

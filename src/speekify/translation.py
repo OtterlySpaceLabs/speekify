@@ -97,7 +97,7 @@ class HuggingFaceTranslator:
             from transformers.utils import logging as transformers_logging
         except ImportError as exc:  # pragma: no cover - only exercised when deps are missing.
             raise RuntimeError(
-                "La traduction n'est pas disponible. Reinstallez Speekify avec ses dependances completes."
+                "Translation is not available. Reinstall Speekify with all dependencies."
             ) from exc
 
         transformers_logging.disable_progress_bar()
@@ -113,8 +113,8 @@ class HuggingFaceTranslator:
         input_token_count = int(inputs["input_ids"].shape[1])
         if input_token_count > TRANSLATION_CHUNK_TOKEN_LIMIT:
             raise ValueError(
-                f"Chunk de traduction trop long: {input_token_count} tokens "
-                f"(limite {TRANSLATION_CHUNK_TOKEN_LIMIT})."
+                f"Translation chunk is too long: {input_token_count} tokens "
+                f"(limit {TRANSLATION_CHUNK_TOKEN_LIMIT})."
             )
         inputs = {name: value.to(device) for name, value in inputs.items()}
 

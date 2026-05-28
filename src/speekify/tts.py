@@ -40,12 +40,12 @@ class PreparedText:
     def summary_notes(self) -> list[str]:
         notes: list[str] = []
         if self.reformatted:
-            notes.append("texte reformate automatiquement")
+            notes.append("text reformatted automatically")
         if self.removed_character_count:
             preview = ", ".join(repr(char) for char in self.removed_characters[:6])
             suffix = ", ..." if len(self.removed_characters) > 6 else ""
             notes.append(
-                f"{self.removed_character_count} caractere(s) supprime(s): {preview}{suffix}"
+                f"{self.removed_character_count} character(s) removed: {preview}{suffix}"
             )
         return notes
 
@@ -74,7 +74,7 @@ class SupertonicSynthesizer:
         if self._engine is None:
             if TTS is None:
                 raise RuntimeError(
-                    "Le package supertonic n'est pas disponible. Reinstallez Speekify avec ses dependances completes."
+                    "The supertonic package is not available. Reinstall Speekify with all dependencies."
                 )
             self._engine = TTS(model=MODEL_NAME)
         return self._engine
@@ -82,7 +82,7 @@ class SupertonicSynthesizer:
     def prepare_text(self, text: str) -> PreparedText:
         original_text = text.strip()
         if not original_text:
-            raise ValueError("Le texte ne peut pas etre vide.")
+            raise ValueError("Text cannot be empty.")
 
         prepared_text = self._preprocess_text(original_text)
         is_valid, unsupported = self._validate_text(prepared_text)
@@ -106,13 +106,13 @@ class SupertonicSynthesizer:
                 if len(remaining_unsupported) > 20:
                     remaining_display += ", ..."
                 raise ValueError(
-                    "Le nettoyage automatique n'a pas suffi. Caracteres restants non supportes: "
+                    "Automatic cleanup was not enough. Unsupported characters remaining: "
                     f"{remaining_display}"
                 )
 
         if not prepared_text.strip():
             raise ValueError(
-                "Le texte ne contient plus de contenu exploitable apres nettoyage automatique."
+                "The text no longer contains usable content after automatic cleanup."
             )
 
         return PreparedText(
@@ -130,7 +130,7 @@ class SupertonicSynthesizer:
         preferred_chunk_length: int | None = None,
     ) -> list[str]:
         if max_batch_length < 10:
-            raise ValueError("La taille maximale d'un batch doit etre au moins 10 caracteres.")
+            raise ValueError("Maximum batch size must be at least 10 characters.")
 
         split_limit = max_batch_length
         if preferred_chunk_length is not None:
@@ -252,7 +252,7 @@ class SupertonicSynthesizer:
         if normalized not in SUPPORTED_TTS_LANGUAGES:
             supported = ", ".join(SUPPORTED_TTS_LANGUAGES)
             raise ValueError(
-                f"Langue TTS non supportee: {lang!r}. Langues disponibles: {supported}"
+                f"Unsupported TTS language: {lang!r}. Available languages: {supported}"
             )
         return normalized
 
@@ -310,7 +310,7 @@ class SupertonicSynthesizer:
         sample_rate: int = 24_000,
     ) -> np.ndarray:
         if not wav_list:
-            raise RuntimeError("Aucun audio n'a ete genere.")
+            raise RuntimeError("No audio was generated.")
         if len(wav_list) == 1:
             return wav_list[0]
 

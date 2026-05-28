@@ -76,7 +76,7 @@ async def resolve_content(
 
     normalized_text = normalize_text(raw_input)
     if not normalized_text:
-        raise ValueError("Le texte ne peut pas etre vide.")
+        raise ValueError("Text cannot be empty.")
     logger.info("Text normalized text_length=%s", len(normalized_text))
     return await translate_content_if_needed(
         ExtractedContent(text=normalized_text),
@@ -136,10 +136,10 @@ async def generate_audio(
     )
 
     if not MIN_SPEED <= request.speed <= MAX_SPEED:
-        raise ValueError(f"La vitesse doit etre comprise entre {MIN_SPEED} et {MAX_SPEED}.")
+        raise ValueError(f"Speed must be between {MIN_SPEED} and {MAX_SPEED}.")
     if not MIN_STEPS <= request.steps <= MAX_STEPS:
         raise ValueError(
-            f"Le nombre de steps doit etre compris entre {MIN_STEPS} et {MAX_STEPS}."
+            f"Steps must be between {MIN_STEPS} and {MAX_STEPS}."
         )
 
     content = await resolve_content(

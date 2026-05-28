@@ -22,31 +22,31 @@ from speekify.logging_utils import configure_logger
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="speekify",
-        description="Genere un fichier WAV depuis un texte ou une URL.",
+        description="Generate a WAV file from text or a URL.",
         epilog=_build_cli_epilog(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "source",
         nargs="*",
-        help="Texte a lire ou URL unique a extraire. Omettre seulement avec stdin.",
+        help="Text to synthesize or a single URL to extract. Omit only when using stdin.",
     )
-    parser.add_argument("--url", action="store_true", help="Force le mode URL.")
-    parser.add_argument("--title", default="", help="Titre de sortie optionnel.")
-    parser.add_argument("--voice", choices=VOICE_NAMES, default=DEFAULT_VOICE, help="Voix Supertonic.")
+    parser.add_argument("--url", action="store_true", help="Force URL extraction mode.")
+    parser.add_argument("--title", default="", help="Optional output title.")
+    parser.add_argument("--voice", choices=VOICE_NAMES, default=DEFAULT_VOICE, help="Supertonic voice.")
     parser.add_argument(
         "--lang",
         default=DEFAULT_TTS_LANG,
         type=_parse_language_code,
-        help="Code ISO 639-1 supporte par Supertonic, par exemple en, fr ou ja. Defaut: en.",
+        help="Supertonic-supported ISO 639-1 code, for example en, fr, or ja. Default: en.",
     )
-    parser.add_argument("--speed", type=float, default=DEFAULT_SPEED, help="Vitesse de lecture.")
-    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS, help="Nombre de steps de synthese.")
+    parser.add_argument("--speed", type=float, default=DEFAULT_SPEED, help="Playback speed.")
+    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS, help="Number of synthesis steps.")
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
-        help="Dossier de sortie. Par defaut: repertoire courant.",
+        help="Output directory. Default: current directory.",
     )
     return parser
 
@@ -54,12 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
 def build_setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="speekify setup",
-        description="Telecharge et prechauffe les modeles utilises par Speekify.",
+        description="Download and warm up the models used by Speekify.",
     )
     parser.add_argument(
         "--skip-translation",
         action="store_true",
-        help="Ne prechauffe pas le modele de traduction anglais vers francais.",
+        help="Do not warm up the English-to-French translation model.",
     )
     return parser
 
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 
     source = _read_source(args.source)
     if source is None:
-        parser.error("une source texte, URL ou stdin est requise")
+        parser.error("a text source, URL, or stdin is required")
 
     logger, log_path = configure_logger()
     synthesizer = _build_synthesizer()
@@ -127,11 +127,11 @@ def _run_setup(argv: list[str]) -> int:
         print(_format_error_message(exc, log_path), file=sys.stderr)
         return 1
 
-    print("Modele Supertonic pret.")
+    print("Supertonic model ready.")
     if args.skip_translation:
-        print("Modele de traduction ignore.")
+        print("Translation model skipped.")
     else:
-        print("Modele de traduction pret.")
+        print("Translation model ready.")
     return 0
 
 
@@ -172,22 +172,22 @@ def _parse_language_code(value: str) -> str:
     if normalized not in SUPPORTED_TTS_LANGUAGES:
         available = ", ".join(SUPPORTED_TTS_LANGUAGES)
         raise argparse.ArgumentTypeError(
-            "Le code langue doit etre supporte par Supertonic. "
-            f"Valeurs disponibles: {available}"
+            "Language code must be supported by Supertonic. "
+            f"Available values: {available}"
         )
     return normalized
 
 
 def _build_cli_epilog() -> str:
     examples = [
-        "Exemples:",
+        "Examples:",
         '  speekify "Hello world"',
-        '  speekify --lang fr "Bonjour tout le monde"',
+        '  speekify --lang fr "Hello world"',
         '  speekify --lang ja https://example.com/article',
         "  speekify setup --help",
         "",
-        f"Langues supportees: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
-        f"Utilisez {UNKNOWN_TTS_LANGUAGE} pour le mode language-agnostic si necessaire.",
+        f"Supported languages: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
+        f"Use {UNKNOWN_TTS_LANGUAGE} for language-agnostic synthesis if needed.",
     ]
     return "\n".join(examples)
 
@@ -214,9 +214,9 @@ def _read_source(source_parts: list[str]) -> str | None:
 
 def _format_error_message(error: Exception, log_path: Path) -> str:
     message = str(error)
-    if "caracteres non supportes par Supertonic" in message:
-        return f"{message}. Supprime ou remplace ces caracteres. Voir {log_path}"
-    return f"{message} (voir {log_path})"
+    if "unsupported by Supertonic" in message:
+        return f"{message}. Remove or replace these characters. See {log_path}"
+    return f"{message} (see {log_path})"
 
 
 def _format_success_message(output_path: Path, artifact: Any) -> str:
