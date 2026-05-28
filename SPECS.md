@@ -21,8 +21,11 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 - Default output directory is the current working directory; `--output-dir` can override it.
 - Keep synthesis local through the Supertonic Python package.
 - Default model: `supertonic-3`.
-- Default voice: `M1`.
-- Default synthesis language: `en`.
+- Default voice: `M5`.
+- Default synthesis language: `fr`.
+- Default speed: `0.98`.
+- Default synthesis steps: `10`.
+- Default Supertonic chunk silence: `0.25` seconds.
 - Speech tagging is enabled by default and combines rules-based `<breath>` placement with CardiffNLP sentiment and rare capped `<sigh>` tags.
 - `--no-tag-sentiment --no-tag-sigh` keeps rules-only tagging; `--no-tags` disables all inline tags.
 - Supported language values come from Supertonic ISO 639-1 codes plus `na` for language-agnostic synthesis.

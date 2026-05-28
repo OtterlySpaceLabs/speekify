@@ -37,7 +37,11 @@ def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypat
     async def fake_generate_audio(request, **_: object) -> GenerationResult:
         assert request.source_text == "Hello from the CLI"
         assert request.output_dir == tmp_path
-        assert request.language_code == "en"
+        assert request.language_code == "fr"
+        assert request.voice == "M5"
+        assert request.speed == 0.98
+        assert request.steps == 10
+        assert request.silence_duration == 0.25
         output_path = tmp_path / "hello-from-the-cli-20260528-120000.wav"
         return GenerationResult(
             output_path=output_path,

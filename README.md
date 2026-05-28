@@ -122,13 +122,13 @@ uv run speekify setup --help
 | Option | Default | Description |
 |---|---|---|
 | `source` | *(stdin if piped)* | Text to synthesize or a URL to extract. Required unless stdin is piped. |
-| `--lang CODE` | `en` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, `zh`, and more. Use `na` for language-agnostic synthesis. |
-| `--voice NAME` | `M1` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
+| `--lang CODE` | `fr` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, and more. Use `na` for language-agnostic synthesis. |
+| `--voice NAME` | `M5` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
 | `--custom-style-path PATH` | — | Load a Supertonic voice-style JSON file, such as a Voice Builder export. Overrides `--voice`. |
-| `--speed VALUE` | `1.05` | Playback speed multiplier (`0.7`–`2.0`). |
-| `--steps N` | `8` | Number of synthesis steps (`1`–`100`). Higher values may improve quality. |
+| `--speed VALUE` | `0.98` | Playback speed multiplier (`0.7`–`2.0`). |
+| `--steps N` | `10` | Number of synthesis steps (`1`–`100`). Higher values may improve quality. |
 | `--max-chunk-length N` | *(auto)* | Maximum characters per internal Supertonic chunk. Leave unset for Supertonic's language-aware default. |
-| `--silence-duration SECONDS` | `0.3` | Silence between Supertonic chunks. Smaller values can make long-form narration feel tighter. |
+| `--silence-duration SECONDS` | `0.25` | Silence between Supertonic chunks. Smaller values can make long-form narration feel tighter. |
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
@@ -162,8 +162,8 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 ## Notes
 
 - The app uses `supertonic-3` by default.
-- The direct CLI defaults to English synthesis (`en`) and accepts only Supertonic-supported ISO 639-1 language codes such as `en`, `fr`, `ja` or `ko`, plus `na` for language-agnostic synthesis.
-- When `--lang fr` is used, English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
+- The direct CLI defaults to French narration (`fr`) with voice `M5`, speed `0.98`, `10` synthesis steps, and `0.25 s` chunk silence. It accepts only Supertonic-supported ISO 639-1 language codes such as `en`, `fr`, `ja` or `ko`, plus `na` for language-agnostic synthesis.
+- When French synthesis is used, including the default, English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
 - Speech tagging runs after optional translation and before synthesis, so tags apply to the final TTS text. By default it combines rules-based `<breath>` placement with CardiffNLP sentiment and rare `<sigh>` tags. Use `--no-tag-sentiment --no-tag-sigh` for rules-only tagging.
 - `speekify setup` warms the CardiffNLP sentiment model used by the default emotion tagging. Use `setup --skip-sentiment` only if you want to skip that download during setup.
 - `<breath>` is the primary inline tag. `<sigh>` is enabled by default but remains rare and capped.
@@ -171,6 +171,6 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.
 - Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
 - Supertonic handles normal long-text chunking internally. Very large inputs above the SDK text limit are split into external batches automatically and merged into one final WAV file.
-- The steps control follows the SDK range `1..100`, with `8` as the default.
+- The steps control follows the SDK range `1..100`, with `10` as the default.
 - If generation fails, the terminal shows a short user-focused error. Add `--verbose` to include the technical log path (`logs/speekify.log`).
 - Each CLI run maintains `logs/speekify.log` automatically and prunes log entries older than 14 days at startup.
