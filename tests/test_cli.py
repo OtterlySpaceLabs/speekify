@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from io import StringIO
+import re
 
 from speekify.__main__ import main
 from speekify.extract import ExtractedContent
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationResult
+
+
+def _normalize_console_output(text: str) -> str:
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    return " ".join(text.split())
 
 
 def test_main_without_input_requires_source(monkeypatch, capsys) -> None:
@@ -374,7 +380,7 @@ def test_main_help_lists_supported_languages(capsys) -> None:
     try:
         main(["--help"])
     except SystemExit as exc:
-        stdout = capsys.readouterr().out
+        stdout = _normalize_console_output(capsys.readouterr().out)
         assert exc.code == 0
         assert "Supported languages:" in stdout
         assert "en, ko, ja" in stdout
