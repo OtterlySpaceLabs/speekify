@@ -8,15 +8,21 @@ from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationResult
 
 
-def test_main_without_input_runs_tui(monkeypatch) -> None:
-    calls: list[str] = []
+def test_main_without_input_requires_source(monkeypatch, capsys) -> None:
+    class FakeTtyStdin(StringIO):
+        def isatty(self) -> bool:
+            return True
 
-    monkeypatch.setattr("speekify.__main__._run_tui", lambda: calls.append("run"))
+    monkeypatch.setattr("sys.stdin", FakeTtyStdin(""))
 
-    exit_code = main([])
-
-    assert exit_code == 0
-    assert calls == ["run"]
+    try:
+        main([])
+    except SystemExit as exc:
+        stderr = capsys.readouterr().err
+        assert exc.code == 2
+        assert "source texte, URL ou stdin" in stderr
+    else:
+        raise AssertionError("main() should exit when no source or stdin is provided")
 
 
 def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypatch, capsys) -> None:
@@ -99,6 +105,21 @@ def test_main_rejects_invalid_language_code(capsys) -> None:
         assert "na" in stderr
     else:
         raise AssertionError("main() should exit for an invalid language code")
+
+
+def test_main_prints_hint_for_unsupported_characters(monkeypatch, capsys) -> None:
+    async def fake_generate_audio(*_: object, **__: object) -> GenerationResult:
+        raise ValueError("Le texte contient des caracteres non supportes par Supertonic: '世'")
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+
+    exit_code = main(["Bonjour", "世"])
+    stderr = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Supprime ou remplace" in stderr
 
 
 def test_main_help_lists_supported_languages(capsys) -> None:

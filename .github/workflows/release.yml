@@ -26,8 +26,8 @@ jobs:
       - name: Sync dependencies
         run: uv sync --group dev
 
-      - name: Run focused tests
-        run: uv run pytest tests/test_cli.py tests/test_app_logging.py
+      - name: Run tests
+        run: uv run pytest
 
       - name: Build standalone archive
         run: ./scripts/build_standalone_macos.sh

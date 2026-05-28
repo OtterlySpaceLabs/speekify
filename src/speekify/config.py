@@ -1,6 +1,5 @@
 from pathlib import Path
 
-OUTPUT_DIR = Path("output")
 LOG_DIR = Path("logs")
 LOG_FILE_NAME = "speekify.log"
 MODEL_NAME = "supertonic-3"

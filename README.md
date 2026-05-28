@@ -1,6 +1,6 @@
 # Speekify
 
-Speekify turns pasted text or the readable content of a URL into a local French WAV file generated with Supertonic v3.
+Speekify turns CLI text, stdin, or the readable content of a URL into a local WAV file generated with Supertonic v3.
 
 ## Install
 
@@ -38,16 +38,12 @@ If you skip setup, the models can still download automatically on first use.
 
 ## Run
 
-Without arguments, Speekify opens the TUI:
+Speekify is a CLI. Provide inline text, a URL, or piped stdin:
 
 ```bash
-speekify
-```
-
-From source:
-
-```bash
-uv run speekify
+speekify "Hello world"
+speekify https://example.com/article
+printf 'Hello from stdin' | speekify
 ```
 
 ### CLI commands
@@ -104,7 +100,7 @@ uv run speekify setup --help
 
 | Option | Default | Description |
 |---|---|---|
-| `source` | *(stdin or TUI)* | Text to synthesize or a URL to extract. Omit to open the TUI. |
+| `source` | *(stdin if piped)* | Text to synthesize or a URL to extract. Required unless stdin is piped. |
 | `--lang CODE` | `en` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, `zh`, and more. Use `na` for language-agnostic synthesis. |
 | `--voice NAME` | `M1` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
 | `--speed VALUE` | `1.05` | Playback speed multiplier (`0.7`–`2.0`). |
@@ -118,8 +114,6 @@ By default, direct CLI generation writes the WAV file into the current working d
 ```text
 ./article-title-20260528-183000.wav
 ```
-
-The TUI keeps writing files into `output/`.
 
 ## Release for maintainers
 
@@ -141,11 +135,10 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 
 - The app uses `supertonic-3` by default.
 - The direct CLI defaults to English synthesis (`en`) and accepts only Supertonic-supported ISO 639-1 language codes such as `en`, `fr`, `ja` or `ko`, plus `na` for language-agnostic synthesis.
-- The TUI keeps using French synthesis (`fr`).
-- English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
+- When `--lang fr` is used, English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
 - URL mode extracts readable body text rather than raw HTML.
-- A single pasted URL is auto-detected and extracted even if Text mode is still selected.
-- Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the app summarizes the cleanup after generation.
+- A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.
+- Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
 - Very large inputs are split into external batches automatically and merged into one final WAV file.
 - The steps control follows the SDK range `1..100`, with `8` as the default.
 - If generation fails, detailed logs are written to `logs/speekify.log`.

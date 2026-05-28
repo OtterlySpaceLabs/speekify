@@ -20,8 +20,7 @@ Current production setup:
 
 - End users can run `speekify` directly from a standalone macOS binary.
 - The first-run model preparation is done with `speekify setup`.
-- Direct CLI generation writes WAV files to the current working directory.
-- The TUI still writes files into `output/`.
+- Direct CLI generation writes WAV files to the current working directory unless `--output-dir` is provided.
 
 ## Prerequisites
 

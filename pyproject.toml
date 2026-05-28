@@ -1,12 +1,11 @@
 [project]
 name = "speekify"
 version = "0.0.1"
-description = "TUI URL/text to WAV converter powered by Supertonic v3"
+description = "CLI URL/text to WAV converter powered by Supertonic v3"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "supertonic>=1.3.1",
-  "textual>=0.89",
   "httpx>=0.27",
   "trafilatura>=1.9",
   "langdetect>=1.0.9",

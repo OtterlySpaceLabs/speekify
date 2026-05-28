@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "source",
         nargs="*",
-        help="Texte a lire ou URL unique a extraire. Sans argument, la TUI est lancee.",
+        help="Texte a lire ou URL unique a extraire. Omettre seulement avec stdin.",
     )
     parser.add_argument("--url", action="store_true", help="Force le mode URL.")
     parser.add_argument("--title", default="", help="Titre de sortie optionnel.")
@@ -75,8 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 
     source = _read_source(args.source)
     if source is None:
-        _run_tui()
-        return 0
+        parser.error("une source texte, URL ou stdin est requise")
 
     logger, log_path = configure_logger()
     synthesizer = _build_synthesizer()
@@ -134,12 +133,6 @@ def _run_setup(argv: list[str]) -> int:
     else:
         print("Modele de traduction pret.")
     return 0
-
-
-def _run_tui() -> None:
-    from speekify.app import SpeekifyApp
-
-    SpeekifyApp().run()
 
 
 def _build_synthesizer() -> object:
