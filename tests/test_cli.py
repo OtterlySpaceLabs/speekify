@@ -175,6 +175,26 @@ def test_main_verbose_prints_log_path_on_error(monkeypatch, capsys) -> None:
     assert "logs/speekify.log" in stderr
 
 
+def test_main_writes_generation_errors_to_default_log(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    async def fake_generate_audio(*_: object, **__: object) -> GenerationResult:
+        raise RuntimeError("Model failed to load")
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+
+    exit_code = main(["Hello"])
+    capsys.readouterr()
+
+    content = (tmp_path / "logs" / "speekify.log").read_text(encoding="utf-8")
+    assert exit_code == 1
+    assert "Logger configured" in content
+    assert "CLI generation failed" in content
+    assert "RuntimeError: Model failed to load" in content
+
+
 def test_main_help_lists_supported_languages(capsys) -> None:
     try:
         main(["--help"])

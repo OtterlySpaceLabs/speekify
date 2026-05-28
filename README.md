@@ -149,3 +149,4 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - Very large inputs are split into external batches automatically and merged into one final WAV file.
 - The steps control follows the SDK range `1..100`, with `8` as the default.
 - If generation fails, the terminal shows a short user-focused error. Add `--verbose` to include the technical log path (`logs/speekify.log`).
+- Each CLI run maintains `logs/speekify.log` automatically and prunes log entries older than 14 days at startup.
