@@ -10,6 +10,12 @@ Publish a macOS standalone binary that can be installed without Python or uv, th
 - a Homebrew tap
 - direct archive download
 
+Current production setup:
+
+- source repository: `OtterlySpaceLabs/speekify` (private)
+- public Homebrew tap: `OtterlySpaceLabs/homebrew-speekify`
+- public Homebrew binary asset: GitHub Release asset attached to `OtterlySpaceLabs/homebrew-speekify`
+
 ## Current distribution model
 
 - End users can run `speekify` directly from a standalone macOS binary.
@@ -19,11 +25,12 @@ Publish a macOS standalone binary that can be installed without Python or uv, th
 
 ## Prerequisites
 
-- Access to the `hiboux/speekify` GitHub repository
+- Access to the `OtterlySpaceLabs/speekify` GitHub repository
+- Access to the `OtterlySpaceLabs/homebrew-speekify` GitHub repository
 - Permission to create tags and releases
-- A Homebrew tap repository such as `hiboux/homebrew-speekify` or equivalent
 - A macOS machine if you want to build and test locally
 - `uv` available locally if you build outside GitHub Actions
+- `gh` authenticated with permission to read the private source repo and publish releases in the tap repo
 
 ## Files involved
 
@@ -94,27 +101,61 @@ speekify-macos-arm64.tar.gz
 
 If the runner architecture changes, the suffix may be `x86_64` instead of `arm64`.
 
-### 5. Compute or copy the SHA256 of the release archive
+### 5. Download the private release asset locally
+
+Because `OtterlySpaceLabs/speekify` is private, Homebrew cannot download assets directly from that repository.
+
+Download the private release asset with `gh`:
+
+```bash
+mkdir -p dist/public-release
+gh release download v0.1.0 \
+  --repo OtterlySpaceLabs/speekify \
+  --pattern speekify-macos-arm64.tar.gz \
+  --dir dist/public-release
+```
+
+Expected result:
+
+- `dist/public-release/speekify-macos-arm64.tar.gz` exists locally
+
+### 6. Publish the archive in the public tap repository
+
+Create or update a public release in `OtterlySpaceLabs/homebrew-speekify` and upload the same archive there:
+
+```bash
+gh release create speekify-v0.1.0 \
+  dist/public-release/speekify-macos-arm64.tar.gz \
+  --repo OtterlySpaceLabs/homebrew-speekify \
+  --title "Speekify v0.1.0" \
+  --notes "Public binary release for Homebrew install"
+```
+
+Expected result:
+
+- the asset is publicly downloadable from `OtterlySpaceLabs/homebrew-speekify`
+- Homebrew can fetch the archive anonymously
+
+### 7. Compute or copy the SHA256 of the public archive
 
 If you built locally, use:
 
 ```bash
-shasum -a 256 dist/speekify-macos-arm64.tar.gz
+shasum -a 256 dist/public-release/speekify-macos-arm64.tar.gz
 ```
-
-If the archive only exists on GitHub Releases, download it and compute the SHA locally.
 
 Keep the final SHA256 value for the Homebrew formula.
 
-### 6. Render the Homebrew formula
+### 8. Render the Homebrew formula
 
 Run:
 
 ```bash
 python scripts/render_homebrew_formula.py \
   --version 0.1.0 \
-  --url https://github.com/hiboux/speekify/releases/download/v0.1.0/speekify-macos-arm64.tar.gz \
-  --sha256 <sha256>
+  --url https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/speekify-v0.1.0/speekify-macos-arm64.tar.gz \
+  --sha256 <sha256> \
+  --homepage https://github.com/OtterlySpaceLabs/speekify
 ```
 
 Optional output to a file:
@@ -122,9 +163,10 @@ Optional output to a file:
 ```bash
 python scripts/render_homebrew_formula.py \
   --version 0.1.0 \
-  --url https://github.com/hiboux/speekify/releases/download/v0.1.0/speekify-macos-arm64.tar.gz \
+  --url https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/speekify-v0.1.0/speekify-macos-arm64.tar.gz \
   --sha256 <sha256> \
-  --output Speekify.rb
+  --homepage https://github.com/OtterlySpaceLabs/speekify \
+  --output /Users/hiboux/Documents/GitHub/homebrew-speekify/Formula/speekify.rb
 ```
 
 Expected result:
@@ -133,7 +175,7 @@ Expected result:
 - the formula installs the standalone binary into `bin`
 - the formula test checks `speekify --help` and `speekify setup --help`
 
-### 7. Publish the Homebrew formula in the tap repository
+### 9. Publish the Homebrew formula in the tap repository
 
 In the tap repository:
 
@@ -144,14 +186,12 @@ In the tap repository:
 At that point, end users can install with:
 
 ```bash
-brew tap hiboux/speekify
+brew tap OtterlySpaceLabs/speekify
 brew install speekify
 speekify setup
 ```
 
-If your tap repository name differs, adjust the `brew tap` command accordingly.
-
-### 8. Smoke-test the install paths
+### 10. Smoke-test the install paths
 
 Test both paths when possible.
 
@@ -159,7 +199,8 @@ Homebrew path:
 
 ```bash
 brew uninstall speekify || true
-brew tap hiboux/speekify
+brew untap OtterlySpaceLabs/speekify || true
+brew tap OtterlySpaceLabs/speekify
 brew install speekify
 speekify --help
 speekify setup --skip-translation
@@ -169,7 +210,7 @@ speekify "Bonjour depuis brew"
 Direct archive path:
 
 ```bash
-curl -L -o speekify.tar.gz https://github.com/hiboux/speekify/releases/latest/download/speekify-macos-arm64.tar.gz
+curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/latest/download/speekify-macos-arm64.tar.gz
 tar -xzf speekify.tar.gz
 ./speekify --help
 ./speekify setup --skip-translation
@@ -203,7 +244,8 @@ This script currently:
 - [ ] `uv run pytest` passes
 - [ ] `uv run ruff check .` passes
 - [ ] tag is pushed
-- [ ] GitHub Release asset is published
+- [ ] private GitHub Release asset is published in `OtterlySpaceLabs/speekify`
+- [ ] public GitHub Release asset is published in `OtterlySpaceLabs/homebrew-speekify`
 - [ ] SHA256 is recorded
 - [ ] Homebrew formula is generated
 - [ ] Homebrew tap is updated
@@ -212,12 +254,13 @@ This script currently:
 
 ## Known limitations
 
-- The current GitHub Actions workflow publishes the standalone archive, but it does not update the Homebrew tap automatically.
+- The current GitHub Actions workflow publishes the standalone archive only to the private source repository release.
+- The public Homebrew asset upload to `OtterlySpaceLabs/homebrew-speekify` is still manual.
 - The release process is currently macOS-focused.
-- The exact Homebrew tap repository still needs to be finalized if it does not already exist.
 
 ## Future improvements
 
+- Automate public asset upload to `OtterlySpaceLabs/homebrew-speekify` after each tagged release
 - Automate formula updates in the Homebrew tap after each tagged release
 - Add separate archives for Apple Silicon and Intel macOS if needed
 - Add notarization and signing if distribution constraints require it
