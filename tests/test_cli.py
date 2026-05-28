@@ -11,11 +11,7 @@ from speekify.workflow import GenerationResult
 def test_main_without_input_runs_tui(monkeypatch) -> None:
     calls: list[str] = []
 
-    class FakeApp:
-        def run(self) -> None:
-            calls.append("run")
-
-    monkeypatch.setattr("speekify.__main__.SpeekifyApp", FakeApp)
+    monkeypatch.setattr("speekify.__main__._run_tui", lambda: calls.append("run"))
 
     exit_code = main([])
 
@@ -48,13 +44,9 @@ def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypat
             content=ExtractedContent(text=request.source_text),
         )
 
-    class FakeApp:
-        def __init__(self) -> None:
-            self.synthesizer = object()
-            self.translator = object()
-
     monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__.SpeekifyApp", FakeApp)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
 
     exit_code = main(["Bonjour", "depuis", "la", "CLI"])
     stdout = capsys.readouterr().out
@@ -86,13 +78,9 @@ def test_main_passes_explicit_language_code(tmp_path, monkeypatch, capsys) -> No
             content=ExtractedContent(text=request.source_text),
         )
 
-    class FakeApp:
-        def __init__(self) -> None:
-            self.synthesizer = object()
-            self.translator = object()
-
     monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__.SpeekifyApp", FakeApp)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
 
     exit_code = main(["--lang", "fr", "Bonjour"])
     stdout = capsys.readouterr().out
@@ -148,17 +136,13 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
             content=ExtractedContent(text=request.source_text),
         )
 
-    class FakeApp:
-        def __init__(self) -> None:
-            self.synthesizer = object()
-            self.translator = object()
-
     class FakeStdin(StringIO):
         def isatty(self) -> bool:
             return False
 
     monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__.SpeekifyApp", FakeApp)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
     monkeypatch.setattr("sys.stdin", FakeStdin("Bonjour via stdin"))
 
     exit_code = main([])
@@ -171,15 +155,11 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
 def test_main_setup_warms_supertonic_and_translation(monkeypatch, capsys) -> None:
     warmed: list[bool] = []
 
-    class FakeApp:
-        def __init__(self, **_: object) -> None:
-            self.synthesizer = object()
-            self.translator = object()
-
     def fake_warm_up_models(**kwargs: object) -> None:
         warmed.append(bool(kwargs["include_translation"]))
 
-    monkeypatch.setattr("speekify.__main__.SpeekifyApp", FakeApp)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
     monkeypatch.setattr("speekify.__main__._warm_up_models", fake_warm_up_models)
 
     exit_code = main(["setup"])
@@ -194,15 +174,11 @@ def test_main_setup_warms_supertonic_and_translation(monkeypatch, capsys) -> Non
 def test_main_setup_can_skip_translation(monkeypatch, capsys) -> None:
     warmed: list[bool] = []
 
-    class FakeApp:
-        def __init__(self, **_: object) -> None:
-            self.synthesizer = object()
-            self.translator = object()
-
     def fake_warm_up_models(**kwargs: object) -> None:
         warmed.append(bool(kwargs["include_translation"]))
 
-    monkeypatch.setattr("speekify.__main__.SpeekifyApp", FakeApp)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
     monkeypatch.setattr("speekify.__main__._warm_up_models", fake_warm_up_models)
 
     exit_code = main(["setup", "--skip-translation"])

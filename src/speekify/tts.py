@@ -206,8 +206,10 @@ class SupertonicSynthesizer:
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
     ) -> SynthesisArtifact:
         normalized_lang = self.validate_language_code(lang)
-        style = self.engine.get_voice_style(voice)
+        engine = self.engine
+        style = engine.get_voice_style(voice)
         max_chunk_length = self._default_chunk_length(normalized_lang)
+        accepts_max_chunk_length = self._engine_accepts_max_chunk_length(engine)
         batches = self.split_text_into_batches(
             prepared_text.text,
             max_batch_length=max_batch_length,
@@ -225,13 +227,17 @@ class SupertonicSynthesizer:
                 "speed": speed,
                 "silence_duration": silence_duration,
             }
-            if self._engine_accepts_max_chunk_length():
+            if accepts_max_chunk_length:
                 synthesize_kwargs["max_chunk_length"] = max_chunk_length
-            wav, duration = self.engine.synthesize(batch, **synthesize_kwargs)
+            wav, duration = engine.synthesize(batch, **synthesize_kwargs)
             wav_list.append(wav)
             duration_seconds += self._duration_to_float(duration)
 
-        merged_wav = self._merge_batches(wav_list, silence_duration=silence_duration)
+        merged_wav = self._merge_batches(
+            wav_list,
+            silence_duration=silence_duration,
+            sample_rate=int(getattr(engine, "sample_rate", 24_000)),
+        )
         duration_seconds += silence_duration * max(0, len(wav_list) - 1)
 
         return SynthesisArtifact(
@@ -274,8 +280,8 @@ class SupertonicSynthesizer:
             return DEFAULT_MAX_CHUNK_LENGTH_KO
         return DEFAULT_MAX_CHUNK_LENGTH
 
-    def _engine_accepts_max_chunk_length(self) -> bool:
-        synthesize = getattr(self.engine, "synthesize")
+    def _engine_accepts_max_chunk_length(self, engine: Any | None = None) -> bool:
+        synthesize = getattr(engine or self.engine, "synthesize")
         return "max_chunk_length" in inspect.signature(synthesize).parameters
 
     def _split_overlong_batch(self, text: str, max_batch_length: int) -> list[str]:
@@ -297,13 +303,17 @@ class SupertonicSynthesizer:
             batches.append(remaining)
         return batches
 
-    def _merge_batches(self, wav_list: list[np.ndarray], silence_duration: float) -> np.ndarray:
+    def _merge_batches(
+        self,
+        wav_list: list[np.ndarray],
+        silence_duration: float,
+        sample_rate: int = 24_000,
+    ) -> np.ndarray:
         if not wav_list:
             raise RuntimeError("Aucun audio n'a ete genere.")
         if len(wav_list) == 1:
             return wav_list[0]
 
-        sample_rate = getattr(self.engine, "sample_rate", 24_000)
         silence = np.zeros((1, int(silence_duration * sample_rate)), dtype=wav_list[0].dtype)
         arrays_to_concat: list[np.ndarray] = []
         for index, wav in enumerate(wav_list):

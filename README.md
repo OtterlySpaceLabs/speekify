@@ -50,17 +50,68 @@ From source:
 uv run speekify
 ```
 
-You can also generate directly from the terminal:
+### CLI commands
+
+All examples below work with the installed binary (`speekify …`) or directly from the source tree (`uv run speekify …`). The `uv run` form is shown alongside each group.
 
 ```bash
-speekify "Bonjour tout le monde"
+# Generate from inline text
+speekify "Hello world"
+uv run speekify "Hello world"
+
 speekify --lang fr "Bonjour tout le monde"
-speekify --help
+uv run speekify --lang fr "Bonjour tout le monde"
+
+# Generate from a URL (auto-detected or forced)
 speekify https://example.com/article
+uv run speekify https://example.com/article
+
+speekify --url https://example.com/article
+uv run speekify --url https://example.com/article
+
+# Pipe text from stdin
 printf 'Hello from stdin' | speekify
+printf 'Hello from stdin' | uv run speekify
+
+# Override output name and directory
+speekify --title my-article --output-dir ~/Desktop "Hello world"
+uv run speekify --title my-article --output-dir ~/Desktop "Hello world"
+
+# Choose a voice
+speekify --voice F2 "Hello world"
+uv run speekify --voice F2 "Hello world"
+
+# Adjust speed and synthesis steps
+speekify --speed 1.2 --steps 20 "Hello world"
+uv run speekify --speed 1.2 --steps 20 "Hello world"
+
+# Download and warm up models
+speekify setup
+uv run speekify setup
+
+speekify setup --skip-translation   # skip the EN→FR translation model
+uv run speekify setup --skip-translation
+
+# Show help
+speekify --help
+uv run speekify --help
+
+speekify setup --help
+uv run speekify setup --help
 ```
 
-Use `--lang` with a Supertonic-supported ISO 639-1 code like `en`, `fr`, `ja` or `ko` to choose the synthesis language. The direct CLI defaults to `en`. `speekify --help` lists the currently supported codes, including `na` for language-agnostic synthesis. Use `--url` to force URL extraction, `--title` to override the output name, and `--output-dir` if you do not want the current directory.
+### CLI options reference
+
+| Option | Default | Description |
+|---|---|---|
+| `source` | *(stdin or TUI)* | Text to synthesize or a URL to extract. Omit to open the TUI. |
+| `--lang CODE` | `en` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, `zh`, and more. Use `na` for language-agnostic synthesis. |
+| `--voice NAME` | `M1` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
+| `--speed VALUE` | `1.05` | Playback speed multiplier (`0.7`–`2.0`). |
+| `--steps N` | `8` | Number of synthesis steps (`1`–`100`). Higher values may improve quality. |
+| `--url` | — | Force URL extraction mode even if the source looks like plain text. |
+| `--title TEXT` | *(auto)* | Override the output file name (without extension). |
+| `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
 
 By default, direct CLI generation writes the WAV file into the current working directory, with names like:
 

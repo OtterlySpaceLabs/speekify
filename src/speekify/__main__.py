@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from collections.abc import Awaitable
 from pathlib import Path
+from typing import Any
 
-from speekify.app import SpeekifyApp
 from speekify.config import (
     DEFAULT_SPEED,
     DEFAULT_STEPS,
@@ -16,8 +17,6 @@ from speekify.config import (
     VOICE_NAMES,
 )
 from speekify.logging_utils import configure_logger
-from speekify.tts import SynthesisArtifact
-from speekify.workflow import GenerationRequest, generate_audio
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,15 +75,17 @@ def main(argv: list[str] | None = None) -> int:
 
     source = _read_source(args.source)
     if source is None:
-        SpeekifyApp().run()
+        _run_tui()
         return 0
 
     logger, log_path = configure_logger()
+    synthesizer = _build_synthesizer()
+    translator = _build_translator()
 
     try:
         generation = asyncio.run(
             generate_audio(
-                GenerationRequest(
+                _build_generation_request(
                     source_text=source,
                     voice=args.voice,
                     language_code=args.lang,
@@ -94,8 +95,8 @@ def main(argv: list[str] | None = None) -> int:
                     is_url_mode=args.url,
                     output_dir=args.output_dir or Path.cwd(),
                 ),
-                synthesizer=SpeekifyApp().synthesizer,
-                translator=SpeekifyApp().translator,
+                synthesizer=synthesizer,
+                translator=translator,
                 logger=logger,
             )
         )
@@ -112,12 +113,13 @@ def _run_setup(argv: list[str]) -> int:
     parser = build_setup_parser()
     args = parser.parse_args(argv)
     logger, log_path = configure_logger()
-    app = SpeekifyApp(logger=logger, log_path=log_path)
+    synthesizer = _build_synthesizer()
+    translator = _build_translator()
 
     try:
         _warm_up_models(
-            synthesizer=app.synthesizer,
-            translator=app.translator,
+            synthesizer=synthesizer,
+            translator=translator,
             include_translation=not args.skip_translation,
             logger=logger,
         )
@@ -132,6 +134,36 @@ def _run_setup(argv: list[str]) -> int:
     else:
         print("Modele de traduction pret.")
     return 0
+
+
+def _run_tui() -> None:
+    from speekify.app import SpeekifyApp
+
+    SpeekifyApp().run()
+
+
+def _build_synthesizer() -> object:
+    from speekify.tts import SupertonicSynthesizer
+
+    return SupertonicSynthesizer()
+
+
+def _build_translator() -> object:
+    from speekify.translation import HuggingFaceTranslator
+
+    return HuggingFaceTranslator()
+
+
+def _build_generation_request(**kwargs: Any) -> object:
+    from speekify.workflow import GenerationRequest
+
+    return GenerationRequest(**kwargs)
+
+
+def generate_audio(*args: Any, **kwargs: Any) -> Awaitable[Any]:
+    from speekify.workflow import generate_audio as run_generate_audio
+
+    return run_generate_audio(*args, **kwargs)
 
 
 def _warm_up_models(*, synthesizer: object, translator: object, include_translation: bool, logger) -> None:
@@ -194,7 +226,7 @@ def _format_error_message(error: Exception, log_path: Path) -> str:
     return f"{message} (voir {log_path})"
 
 
-def _format_success_message(output_path: Path, artifact: SynthesisArtifact) -> str:
+def _format_success_message(output_path: Path, artifact: Any) -> str:
     lines = [str(output_path), f"{artifact.duration_seconds:.2f}s"]
     notes = artifact.summary_notes()
     if notes:
