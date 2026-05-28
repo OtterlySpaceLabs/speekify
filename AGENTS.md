@@ -13,4 +13,5 @@ The installed command is `speekify`, wired by `pyproject.toml` to `speekify.__ma
 - [Codebase conventions](docs/agents/codebase-conventions.md)
 - [Testing patterns](docs/agents/testing-patterns.md)
 - [Dependencies and integrations](docs/agents/dependencies-integrations.md)
+- [Release runbook](docs/agents/release-runbook.md)
 - [Deletion candidates](docs/agents/deletion-candidates.md)
