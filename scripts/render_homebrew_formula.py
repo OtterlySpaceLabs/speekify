@@ -39,7 +39,7 @@ def render_formula(*, version: str, url: str, sha256: str, homepage: str) -> str
         "  end\n"
         "\n"
         "  test do\n"
-        '    assert_match "Generate a WAV file", shell_output("#{bin}/speekify --help")\n'
+        '    assert_match "Generate a local WAV file", shell_output("#{bin}/speekify --help")\n'
         '    assert_match "Download and warm up", shell_output("#{bin}/speekify setup --help")\n'
         "  end\n"
         "end\n"
