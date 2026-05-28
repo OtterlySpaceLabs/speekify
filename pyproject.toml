@@ -1,6 +1,6 @@
 [project]
 name = "speekify"
-version = "0.0.1"
+version = "0.0.2"
 description = "CLI URL/text to WAV converter powered by Supertonic v3"
 readme = "README.md"
 requires-python = ">=3.11"
