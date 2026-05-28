@@ -312,22 +312,18 @@ tar -xzf speekify.tar.gz
 ./speekify setup --help >/dev/null
 ```
 
-Smoke test du tap Homebrew public:
+Verification du tap Homebrew public sans modifier l'installation locale:
 
 ```bash
-if brew list --formula | grep -qx speekify; then brew uninstall speekify; fi
-if brew tap | grep -qx otterlyspacelabs/speekify; then brew untap otterlyspacelabs/speekify; fi
-brew tap otterlyspacelabs/speekify
-HOMEBREW_NO_AUTO_UPDATE=1 brew install speekify
-brew test speekify
-brew uninstall speekify
+HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --formula "$TAP_REPO/Formula/speekify.rb"
+HOMEBREW_NO_AUTO_UPDATE=1 brew fetch --formula "$TAP_REPO/Formula/speekify.rb"
 ```
 
 Resultat attendu:
 
 - le SHA256 du telechargement public correspond a celui de l'archive locale publiee
-- `brew install speekify` installe la version cible
-- `brew test speekify` passe
+- la formule Homebrew passe `brew audit --strict`
+- `brew fetch` reussit sur la formule publiee sans installer ni desinstaller `speekify`
 
 ## 13. Checklist finale
 
@@ -346,7 +342,7 @@ Resultat attendu:
 - [ ] `Formula/speekify.rb` pointe vers l'URL publique correcte et le bon SHA256
 - [ ] la formule Homebrew a ete committee et poussee dans le tap public
 - [ ] le telechargement public direct fonctionne
-- [ ] `brew install speekify` puis `brew test speekify` fonctionnent
+- [ ] la formule Homebrew passe `brew audit --strict` et `brew fetch` sans modifier l'installation locale
 
 ## 14. Procedure de rollback ou points de vigilance
 
