@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from speekify.extract import ExtractedContent
+from speekify.tagging import TaggingResult
 from speekify.translation import TranslationResult
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationRequest, generate_audio, resolve_content
@@ -38,6 +39,15 @@ class FrenchTranslator:
             target_language="fr",
             original_text=text,
         )
+
+
+class InlineBreathTagger:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def tag(self, text: str, *, language_code: str) -> TaggingResult:
+        self.calls.append((text, language_code))
+        return TaggingResult(original_text=text, text=f"{text} <breath>")
 
 
 class PermissiveSuccessSynthesizer:
@@ -154,7 +164,32 @@ def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
     assert statuses == [
         "checking language",
         "preparing text",
+        "annotating text",
         "loading model",
         "synthesizing",
         "saving",
     ]
+
+
+def test_generate_audio_applies_tags_after_preparing_text(tmp_path) -> None:
+    tagger = InlineBreathTagger()
+
+    result = asyncio.run(
+        generate_audio(
+            GenerationRequest(
+                source_text="Bonjour 😀 monde",
+                voice="M1",
+                language_code="fr",
+                speed=1.05,
+                steps=8,
+                output_dir=tmp_path,
+            ),
+            synthesizer=PermissiveSuccessSynthesizer(),
+            translator=NoopTranslator(),
+            tagger=tagger,
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert tagger.calls == [("Bonjour monde.", "fr")]
+    assert result.artifact.prepared_text.text == "Bonjour monde. <breath>"

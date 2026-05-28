@@ -127,6 +127,27 @@ VerboseOption = Annotated[
     bool,
     typer.Option("--verbose", help="Show technical diagnostics such as log file paths."),
 ]
+TagsOption = Annotated[
+    bool,
+    typer.Option(
+        "--tags/--no-tags",
+        help="Add sparse Supertonic inline speech tags such as <breath>.",
+    ),
+]
+TagSentimentOption = Annotated[
+    bool,
+    typer.Option(
+        "--tag-sentiment",
+        help="Use optional CardiffNLP sentiment signals when placing speech tags.",
+    ),
+]
+TagSighOption = Annotated[
+    bool,
+    typer.Option(
+        "--tag-sigh",
+        help="Allow very rare <sigh> tags when sentiment and rules strongly agree.",
+    ),
+]
 SkipTranslationOption = Annotated[
     bool,
     typer.Option(
@@ -159,6 +180,9 @@ def generation_command(
     speed: SpeedOption = DEFAULT_SPEED,
     steps: StepsOption = DEFAULT_STEPS,
     output_dir: OutputDirOption = None,
+    tags: TagsOption = True,
+    tag_sentiment: TagSentimentOption = False,
+    tag_sigh: TagSighOption = False,
     verbose: VerboseOption = False,
 ) -> int:
     return _run_generation(
@@ -170,6 +194,9 @@ def generation_command(
         speed=speed,
         steps=steps,
         output_dir=output_dir,
+        tags=tags,
+        tag_sentiment=tag_sentiment,
+        tag_sigh=tag_sigh,
         verbose=verbose,
     )
 
@@ -217,6 +244,9 @@ def _run_generation(
     speed: float,
     steps: int,
     output_dir: Path | None,
+    tags: bool,
+    tag_sentiment: bool,
+    tag_sigh: bool,
     verbose: bool,
 ) -> int:
     source_text = _read_source(source)
@@ -226,6 +256,12 @@ def _run_generation(
     logger, log_path = configure_logger(verbose=verbose)
     synthesizer = _build_synthesizer()
     translator = _build_translator()
+    tagging_config = _build_tagging_config(
+        enabled=tags,
+        use_sentiment=tag_sentiment,
+        enable_sigh=tag_sigh,
+    )
+    tagger = _build_tagger(tagging_config)
 
     try:
         with console.status(_format_status("starting"), spinner="dots") as status:
@@ -244,9 +280,11 @@ def _run_generation(
                         title=title.strip(),
                         is_url_mode=is_url_mode,
                         output_dir=output_dir or Path.cwd(),
+                        tagging_config=tagging_config,
                     ),
                     synthesizer=synthesizer,
                     translator=translator,
+                    tagger=tagger,
                     logger=logger,
                     status_callback=update_status,
                 )
@@ -292,6 +330,26 @@ def _build_translator() -> object:
     from speekify.translation import HuggingFaceTranslator
 
     return HuggingFaceTranslator()
+
+
+def _build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bool) -> object:
+    from speekify.tagging import TaggingConfig
+
+    return TaggingConfig(
+        enabled=enabled,
+        use_sentiment=enabled and use_sentiment,
+        enable_sigh=enabled and enable_sigh,
+    )
+
+
+def _build_tagger(tagging_config: object) -> object:
+    from speekify.tagging import SupertoneTagger
+    from speekify.tagging.cardiff import CardiffSentimentAnalyzer
+
+    sentiment_analyzer = None
+    if getattr(tagging_config, "use_sentiment", False):
+        sentiment_analyzer = CardiffSentimentAnalyzer()
+    return SupertoneTagger(config=tagging_config, sentiment_analyzer=sentiment_analyzer)
 
 
 def _build_generation_request(**kwargs: Any) -> object:
@@ -364,6 +422,7 @@ def _format_status(message: str) -> str:
         "checking language": "Checking input language",
         "translating to French": "Translating to French",
         "preparing text": "Preparing text",
+        "annotating text": "Adding speech cues",
         "loading model": "Loading speech model",
         "synthesizing": "Generating speech",
         "saving": "Saving WAV file",

@@ -95,6 +95,48 @@ def test_main_passes_explicit_language_code(tmp_path, monkeypatch, capsys) -> No
     assert str(tmp_path / "fr.wav") in stdout
 
 
+def test_main_passes_disabled_tagging_config(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    fake_tagger = object()
+
+    def fake_build_tagger(tagging_config: object) -> object:
+        assert getattr(tagging_config, "enabled") is False
+        assert getattr(tagging_config, "use_sentiment") is False
+        assert getattr(tagging_config, "enable_sigh") is False
+        return fake_tagger
+
+    async def fake_generate_audio(request, **kwargs: object) -> GenerationResult:
+        assert request.tagging_config.enabled is False
+        assert kwargs["tagger"] is fake_tagger
+        return GenerationResult(
+            output_path=tmp_path / "no-tags.wav",
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=0.5,
+                batch_count=1,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text=request.source_text,
+                    reformatted=False,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text=request.source_text),
+        )
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_tagger", fake_build_tagger)
+
+    exit_code = main(["--no-tags", "Hello"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert str(tmp_path / "no-tags.wav") in stdout
+
+
 def test_main_does_not_warn_for_batching_or_reformatting(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 

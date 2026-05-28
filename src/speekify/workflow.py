@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -16,6 +16,7 @@ from speekify.config import (
 )
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
 from speekify.naming import build_output_path
+from speekify.tagging import SupertoneTagger, TaggingConfig
 from speekify.tts import SynthesisArtifact, SupertonicSynthesizer
 from speekify.translation import HuggingFaceTranslator
 
@@ -29,6 +30,7 @@ class GenerationRequest:
     language_code: str
     speed: float
     steps: int
+    tagging_config: TaggingConfig = field(default_factory=TaggingConfig)
     title: str = ""
     is_url_mode: bool = False
     output_dir: Path = Path.cwd()
@@ -121,6 +123,7 @@ async def generate_audio(
     *,
     synthesizer: SupertonicSynthesizer,
     translator: HuggingFaceTranslator,
+    tagger: SupertoneTagger | None = None,
     logger: logging.Logger,
     status_callback: StatusCallback | None = None,
 ) -> GenerationResult:
@@ -160,6 +163,27 @@ async def generate_audio(
         prepared_text.removed_character_count,
         prepared_text.removed_characters,
     )
+
+    if request.tagging_config.enabled:
+        _update_status(status_callback, "annotating text")
+        active_tagger = tagger or SupertoneTagger(config=request.tagging_config)
+        tagging_result = await asyncio.to_thread(
+            active_tagger.tag,
+            prepared_text.text,
+            language_code=request.language_code,
+        )
+        logger.info(
+            "Speech tags checked changed=%s counts=%s sentiment_used=%s",
+            tagging_result.changed,
+            dict(tagging_result.tag_counts),
+            tagging_result.sentiment_used,
+        )
+        if tagging_result.changed:
+            prepared_text = replace(
+                prepared_text,
+                text=tagging_result.text,
+                reformatted=True,
+            )
 
     output_title = request.title or content.best_title()
     output_path = build_output_path(request.output_dir, output_title)

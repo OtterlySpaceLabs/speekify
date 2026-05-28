@@ -83,6 +83,10 @@ uv run speekify --voice F2 "Hello world"
 speekify --speed 1.2 --steps 20 "Hello world"
 uv run speekify --speed 1.2 --steps 20 "Hello world"
 
+# Control sparse inline speech tags
+speekify --no-tags "Hello world"
+uv run speekify --tag-sentiment --tag-sigh --lang fr https://example.com/article
+
 # Download and warm up models
 speekify setup
 uv run speekify setup
@@ -114,6 +118,9 @@ uv run speekify setup --help
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
+| `--tags / --no-tags` | `--tags` | Add sparse Supertonic inline speech tags, mainly `<breath>`. |
+| `--tag-sentiment` | disabled | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
+| `--tag-sigh` | disabled | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
 | `--verbose` | disabled | Show technical diagnostics such as the log file path when a command fails. |
 
 By default, direct CLI generation writes the WAV file into the current working directory, with names like:
@@ -143,6 +150,8 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - The app uses `supertonic-3` by default.
 - The direct CLI defaults to English synthesis (`en`) and accepts only Supertonic-supported ISO 639-1 language codes such as `en`, `fr`, `ja` or `ko`, plus `na` for language-agnostic synthesis.
 - When `--lang fr` is used, English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
+- Speech tagging runs after optional translation and before audio chunking, so tags apply to the final TTS text. Rules-only tagging works without Hugging Face sentiment models.
+- `<breath>` is the primary inline tag. `<sigh>` is disabled by default and remains capped even when enabled.
 - URL mode extracts readable body text rather than raw HTML.
 - A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.
 - Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
