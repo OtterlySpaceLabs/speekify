@@ -11,7 +11,7 @@ Once a release has been published, you can install the standalone binary with Ho
 Homebrew tap flow:
 
 ```bash
-brew tap hiboux/speekify
+brew tap OtterlySpaceLabs/speekify
 brew install speekify
 speekify setup
 ```
@@ -19,7 +19,7 @@ speekify setup
 Direct download flow:
 
 ```bash
-curl -L -o speekify.tar.gz https://github.com/hiboux/speekify/releases/latest/download/speekify-macos-arm64.tar.gz
+curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/latest/download/speekify-macos-arm64.tar.gz
 tar -xzf speekify.tar.gz
 mv speekify /usr/local/bin/speekify
 speekify setup
@@ -153,7 +153,7 @@ To build a standalone macOS archive and generate the Homebrew formula inputs:
 ./scripts/build_standalone_macos.sh
 python scripts/render_homebrew_formula.py \
 	--version 0.1.0 \
-	--url https://github.com/hiboux/speekify/releases/download/v0.1.0/speekify-macos-arm64.tar.gz \
+	--url https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/speekify-v0.1.0/speekify-macos-arm64.tar.gz \
 	--sha256 <sha256>
 ```
 
