@@ -157,3 +157,97 @@ async def test_extract_url_uses_medium_feed_fallback_on_custom_domain(monkeypatc
         record.message.startswith("Medium feed fallback triggered url=https://uxdesign.cc/")
         for record in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_extract_url_uses_medium_graphql_fallback_when_feed_misses_article(
+    monkeypatch,
+    caplog,
+) -> None:
+    article_url = (
+        "https://uxdesign.cc/"
+        "designing-with-claude-code-and-codex-cli-building-ai-driven-workflows-powered-by-code-connect-ui-f10c136ec11f"
+    )
+    feed_url = "https://uxdesign.cc/feed/"
+    feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <item>
+      <title><![CDATA[Another article]]></title>
+      <link><![CDATA[https://uxdesign.cc/another-article-deadbeefcafe?source=rss]]></link>
+      <guid isPermaLink="false">https://medium.com/p/deadbeefcafe</guid>
+      <content:encoded><![CDATA[
+        <p>This is not the requested article.</p>
+      ]]></content:encoded>
+    </item>
+  </channel>
+</rss>
+"""
+    graphql_payload = {
+        "data": {
+            "post": {
+                "id": "f10c136ec11f",
+                "title": "GraphQL Medium Article",
+                "content": {
+                    "bodyModel": {
+                        "paragraphs": [
+                            {"text": "", "type": "IMG", "__typename": "Paragraph"},
+                            {
+                                "text": "GraphQL intro paragraph.",
+                                "type": "P",
+                                "__typename": "Paragraph",
+                            },
+                            {
+                                "text": "Another paragraph with enough content to exceed the minimum length.",
+                                "type": "P",
+                                "__typename": "Paragraph",
+                            },
+                        ]
+                    }
+                },
+            }
+        }
+    }
+
+    class FakeAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+            request = httpx.Request("GET", url, headers=headers)
+            if url == article_url:
+                return httpx.Response(403, request=request, text="forbidden")
+            if url == feed_url:
+                return httpx.Response(200, request=request, text=feed_xml)
+            raise AssertionError(f"unexpected GET URL {url}")
+
+        async def post(
+            self,
+            url: str,
+            headers: dict[str, str] | None = None,
+            json: dict[str, object] | None = None,
+        ) -> httpx.Response:
+            request = httpx.Request("POST", url, headers=headers, json=json)
+            if url != "https://medium.com/_/graphql":
+                raise AssertionError(f"unexpected POST URL {url}")
+            return httpx.Response(200, request=request, json=graphql_payload)
+
+    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+    caplog.set_level(logging.INFO, logger="speekify")
+
+    content = await extract_url(article_url, min_chars=40)
+
+    assert content.title == "GraphQL Medium Article"
+    assert content.text == (
+        "GraphQL intro paragraph.\n\nAnother paragraph with enough content to exceed the minimum length."
+    )
+    assert any(
+        record.message.startswith("Medium GraphQL fallback triggered url=https://uxdesign.cc/")
+        for record in caplog.records
+    )

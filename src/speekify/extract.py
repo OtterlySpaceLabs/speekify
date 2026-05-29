@@ -26,6 +26,22 @@ DEFAULT_FETCH_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9,fr-FR;q=0.8,fr;q=0.7",
 }
 
+MEDIUM_GRAPHQL_HEADERS = {
+    **DEFAULT_FETCH_HEADERS,
+    "Accept": "*/*",
+    "Content-Type": "application/json",
+    "Origin": "https://medium.com",
+    "Referer": "https://medium.com/",
+}
+
+MEDIUM_POST_BY_ID_QUERY = (
+    "query PostByIdBody($id: ID!) { "
+    "post(id: $id) { "
+    "id title content { bodyModel { paragraphs { text type __typename } __typename } __typename } __typename "
+    "} "
+    "}"
+)
+
 
 @dataclass(frozen=True)
 class ExtractedContent:
@@ -77,7 +93,7 @@ def is_single_url_input(text: str) -> bool:
 
 async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> ExtractedContent:
     validated_url = validate_url(url)
-    should_attempt_medium_feed = False
+    should_attempt_medium_fallback = False
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
         direct_error: httpx.HTTPError | None = None
         try:
@@ -88,13 +104,13 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
                 return extracted
         except httpx.HTTPStatusError as exc:
             direct_error = exc
-            should_attempt_medium_feed = _should_retry_with_medium_feed(validated_url, exc.response)
-            if not should_attempt_medium_feed:
+            should_attempt_medium_fallback = _should_retry_with_medium_feed(validated_url, exc.response)
+            if not should_attempt_medium_fallback:
                 raise
         except httpx.HTTPError as exc:
             direct_error = exc
 
-        if should_attempt_medium_feed:
+        if should_attempt_medium_fallback:
             logger.info(
                 "Medium feed fallback triggered url=%s status_code=%s feed_url=%s",
                 validated_url,
@@ -103,6 +119,18 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
             )
             try:
                 extracted = await _extract_medium_article_from_feed(
+                    client,
+                    validated_url,
+                    min_chars=min_chars,
+                )
+            except httpx.HTTPError:
+                extracted = None
+            if extracted is not None:
+                return extracted
+
+            logger.info("Medium GraphQL fallback triggered url=%s", validated_url)
+            try:
+                extracted = await _extract_medium_article_from_graphql(
                     client,
                     validated_url,
                     min_chars=min_chars,
@@ -166,6 +194,73 @@ async def _extract_medium_article_from_feed(
     response = await client.get(feed_url, headers=DEFAULT_FETCH_HEADERS)
     response.raise_for_status()
     return _extract_medium_article_from_feed_xml(response.text, article_url, min_chars=min_chars)
+
+
+async def _extract_medium_article_from_graphql(
+    client: httpx.AsyncClient,
+    article_url: str,
+    min_chars: int,
+) -> ExtractedContent | None:
+    article_id = _extract_medium_article_id(article_url)
+    if article_id is None:
+        return None
+
+    response = await client.post(
+        "https://medium.com/_/graphql",
+        headers=MEDIUM_GRAPHQL_HEADERS,
+        json={
+            "operationName": "PostByIdBody",
+            "query": MEDIUM_POST_BY_ID_QUERY,
+            "variables": {"id": article_id},
+        },
+    )
+    response.raise_for_status()
+    return _extract_medium_article_from_graphql_payload(response.json(), min_chars=min_chars)
+
+
+def _extract_medium_article_from_graphql_payload(
+    payload: dict[str, object],
+    min_chars: int,
+) -> ExtractedContent | None:
+    post = payload.get("data", {})
+    if not isinstance(post, dict):
+        return None
+
+    post_data = post.get("post", {})
+    if not isinstance(post_data, dict):
+        return None
+
+    content = post_data.get("content", {})
+    if not isinstance(content, dict):
+        return None
+
+    body_model = content.get("bodyModel", {})
+    if not isinstance(body_model, dict):
+        return None
+
+    paragraphs = body_model.get("paragraphs", [])
+    if not isinstance(paragraphs, list):
+        return None
+
+    text_parts: list[str] = []
+    for paragraph in paragraphs:
+        if not isinstance(paragraph, dict):
+            continue
+        text = paragraph.get("text", "")
+        if not isinstance(text, str):
+            continue
+        stripped_text = text.strip()
+        if stripped_text:
+            text_parts.append(stripped_text)
+
+    text = normalize_text("\n\n".join(text_parts))
+    if len(text) < min_chars:
+        return None
+
+    title = post_data.get("title", "")
+    if not isinstance(title, str):
+        title = ""
+    return ExtractedContent(text=text, title=title)
 
 
 def _build_medium_feed_url(article_url: str) -> str | None:
