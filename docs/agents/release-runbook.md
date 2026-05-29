@@ -316,8 +316,15 @@ MANPATH="$TMPDIR/share/man${MANPATH:+:$MANPATH}" man speekify >/dev/null
 Verification du tap Homebrew public sans modifier l'installation locale:
 
 ```bash
-HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --formula "$TAP_REPO/Formula/speekify.rb"
-HOMEBREW_NO_AUTO_UPDATE=1 brew fetch --formula "$TAP_REPO/Formula/speekify.rb"
+if ! brew --repo otterlyspacelabs/speekify >/dev/null 2>&1; then
+  brew tap otterlyspacelabs/speekify https://github.com/OtterlySpaceLabs/homebrew-speekify
+fi
+
+TAP_CLONE="$(brew --repo otterlyspacelabs/speekify)"
+git -C "$TAP_CLONE" pull --ff-only
+
+HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --tap otterlyspacelabs/speekify
+HOMEBREW_NO_AUTO_UPDATE=1 brew fetch --force --formula otterlyspacelabs/speekify/speekify
 ```
 
 Resultat attendu:
