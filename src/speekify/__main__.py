@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
+import os
+import platform
 import sys
 from collections.abc import Awaitable, Callable, Sequence
+from importlib import metadata
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -32,6 +36,8 @@ from speekify.console import console, error_console
 from speekify.logging_utils import configure_logger
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+PACKAGE_NAME = "speekify"
+DOCTOR_REMEDIATION = "Run `speekify setup` to download or repair the local models."
 
 
 def _build_cli_epilog() -> str:
@@ -41,6 +47,12 @@ def _build_cli_epilog() -> str:
         '  speekify --lang fr "Hello world"',
         '  speekify --lang ja https://example.com/article',
         "  printf 'Hello from stdin' | speekify",
+        "",
+        "Maintenance:",
+        "  speekify --version",
+        "  speekify -v",
+        "  speekify --doctor",
+        "  speekify setup",
         "  speekify setup --help",
         "",
         f"Supported languages: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
@@ -199,8 +211,6 @@ setup_app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
-
-
 @generation_app.command(help=GENERATION_HELP)
 def generation_command(
     source: SourceArgument = None,
@@ -249,10 +259,13 @@ def setup_command(
         skip_sentiment=skip_sentiment,
         verbose=verbose,
     )
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if len(argv) == 1 and argv[0] in {"--version", "-v"}:
+        console.print(_get_version())
+        return 0
+    if len(argv) == 1 and argv[0] == "--doctor":
+        return _run_doctor()
     if argv and argv[0] == "setup":
         return _invoke_typer(setup_app, argv[1:], prog_name="speekify setup")
     return _invoke_typer(generation_app, argv, prog_name="speekify")
@@ -374,6 +387,105 @@ def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -
         log_path=log_path if verbose else None,
     )
     return 0
+
+
+def _run_doctor() -> int:
+    report = _build_doctor_report()
+    has_errors = any(status == "error" for _, _, status in report)
+    _render_doctor_report(report)
+    return 1 if has_errors else 0
+
+
+def _get_version() -> str:
+    try:
+        return metadata.version(PACKAGE_NAME)
+    except metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def _build_doctor_report() -> list[tuple[str, str, str]]:
+    logger, log_path = configure_logger(verbose=False)
+    report = _doctor_runtime_report(log_path)
+    report.extend(
+        _check_dependency(module_name, label=label)
+        for module_name, label in _doctor_dependencies()
+    )
+    report.extend(
+        _check_model_load(label, load_model=load_model, logger=logger)
+        for label, load_model in _doctor_model_checks()
+    )
+    return report
+
+
+def _doctor_runtime_report(log_path: Path) -> list[tuple[str, str, str]]:
+    return [
+        ("Version", _get_version(), "ok"),
+        ("Python", sys.version.split()[0], "ok"),
+        ("Executable", sys.executable, "ok"),
+        ("Platform", platform.platform(), "ok"),
+        ("Package", str(Path(__file__).resolve().parent), "ok"),
+        _check_log_target(log_path),
+    ]
+
+
+def _doctor_dependencies() -> tuple[tuple[str, str], ...]:
+    return (
+        ("httpx", "Dependency httpx"),
+        ("langdetect", "Dependency langdetect"),
+        ("rich", "Dependency rich"),
+        ("sacremoses", "Dependency sacremoses"),
+        ("sentencepiece", "Dependency sentencepiece"),
+        ("supertonic", "Dependency supertonic"),
+        ("typer", "Dependency typer"),
+        ("torch", "Dependency torch"),
+        ("trafilatura", "Dependency trafilatura"),
+        ("transformers", "Dependency transformers"),
+    )
+
+
+def _doctor_model_checks() -> tuple[tuple[str, Callable[[], object]], ...]:
+    return (
+        ("Supertonic model", lambda: getattr(_build_synthesizer(), "engine")),
+        ("Translation model", lambda: getattr(_build_translator(), "backend")),
+        ("Emotion model", lambda: getattr(_build_sentiment_analyzer(), "backend")),
+    )
+
+
+def _check_log_target(log_path: Path) -> tuple[str, str, str]:
+    target_dir = log_path.parent
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return ("Log path", f"unavailable ({exc})", "error")
+
+    if not os_access_writable(target_dir):
+        return ("Log path", f"not writable: {target_dir}", "error")
+    return ("Log path", str(log_path), "ok")
+
+
+def os_access_writable(path: Path) -> bool:
+    return path.exists() and path.is_dir() and os.access(path, os.W_OK)
+
+
+def _check_dependency(module_name: str, *, label: str) -> tuple[str, str, str]:
+    module_spec = importlib.util.find_spec(module_name)
+    if module_spec is None:
+        return (label, "missing", "error")
+    return (label, "available", "ok")
+
+
+def _check_model_load(
+    label: str,
+    *,
+    load_model: Callable[[], object],
+    logger: logging.Logger,
+) -> tuple[str, str, str]:
+    try:
+        load_model()
+    except Exception as exc:
+        logger.exception("Doctor check failed for %s", label)
+        return (label, str(exc).strip() or exc.__class__.__name__, "error")
+    return (label, "ready", "ok")
 
 
 def _build_synthesizer() -> object:
@@ -603,6 +715,35 @@ def _render_setup_success(
         console.print("Emotion model ready.", style="green")
     else:
         console.print("Emotion model skipped.", style="yellow")
+
+
+def _render_doctor_report(report: Sequence[tuple[str, str, str]]) -> None:
+    table = Table(show_header=False, box=box.SIMPLE, expand=False)
+    table.add_column("Check", style="bold")
+    table.add_column("Status")
+    table.add_column("Value")
+
+    has_errors = False
+    for label, value, status in report:
+        if status == "error":
+            has_errors = True
+        style = "green" if status == "ok" else "red"
+        table.add_row(label, f"[{style}]{status}[/{style}]", value)
+
+    console.print(
+        Panel(
+            table,
+            title="Doctor",
+            title_align="left",
+            border_style="green" if not has_errors else "yellow",
+            box=box.ROUNDED,
+        )
+    )
+    if has_errors:
+        error_console.print("Doctor found one or more problems.", style="yellow")
+        error_console.print(DOCTOR_REMEDIATION, style="yellow")
+    else:
+        console.print("Doctor checks passed.", style="green")
 
 
 def _render_warnings(notes: Sequence[str]) -> None:

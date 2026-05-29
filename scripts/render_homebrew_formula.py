@@ -36,11 +36,15 @@ def render_formula(*, version: str, url: str, sha256: str, homepage: str) -> str
         "\n"
         "  def install\n"
         '    bin.install "speekify"\n'
+        '    man1.install "share/man/man1/speekify.1"\n'
         "  end\n"
         "\n"
         "  test do\n"
         '    assert_match "Generate a local WAV file", shell_output("#{bin}/speekify --help")\n'
+        '    assert_match "speekify --doctor", shell_output("#{bin}/speekify --help")\n'
+        f'    assert_match "{version}", shell_output("#{{bin}}/speekify --version")\n'
         '    assert_match "Download and warm up", shell_output("#{bin}/speekify setup --help")\n'
+        '    assert_predicate man1/"speekify.1", :exist?\n'
         "  end\n"
         "end\n"
     )

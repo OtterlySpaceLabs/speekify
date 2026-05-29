@@ -24,5 +24,7 @@ uv run pyinstaller \
 
 mkdir -p dist/release
 cp dist/speekify dist/release/speekify
-tar -C dist/release -czf "dist/${archive_name}" speekify
+mkdir -p dist/release/share/man/man1
+cp docs/man/speekify.1 dist/release/share/man/man1/speekify.1
+tar -C dist/release -czf "dist/${archive_name}" speekify share
 shasum -a 256 "dist/${archive_name}"

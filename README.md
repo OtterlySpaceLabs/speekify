@@ -109,6 +109,20 @@ uv run speekify setup --skip-sentiment
 speekify --verbose "Hello world"
 uv run speekify --verbose "Hello world"
 
+# Show the installed Speekify version
+speekify --version
+uv run speekify --version
+
+speekify -v
+uv run speekify -v
+
+# Inspect the local runtime and dependency health
+speekify --doctor
+uv run speekify --doctor
+
+# Read the manual page after installation
+man speekify
+
 # Show help
 speekify --help
 uv run speekify --help
@@ -136,6 +150,18 @@ uv run speekify setup --help
 | `--tag-sentiment / --no-tag-sentiment` | `--tag-sentiment` | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
 | `--tag-sigh / --no-tag-sigh` | `--tag-sigh` | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
 | `--verbose` | disabled | Show technical diagnostics such as the log file path when a command fails. |
+| `--version`, `-v` | — | Print the installed Speekify version and exit. |
+
+Additional commands:
+
+| Command | Description |
+|---|---|
+| `speekify setup` | Download and warm up the local models. |
+| `speekify --doctor` | Verify runtime dependencies, actively load the AI models, and suggest `speekify setup` if a check fails. |
+
+The main help output also includes a maintenance section with `speekify --version`, `speekify -v`, `speekify --doctor`, and `speekify setup` so the operational commands stay discoverable from `speekify --help`.
+
+Installed distributions also ship a manual page. After installation through Homebrew, or from a packaged distribution that installs `share/man/man1/speekify.1`, you can use `man speekify` for a full command reference and software overview.
 
 By default, direct CLI generation writes the WAV file into the current working directory, with names like:
 

@@ -172,7 +172,8 @@ Expected result:
 
 - a valid Homebrew formula named `Speekify` is generated
 - the formula installs the standalone binary into `bin`
-- the formula test checks `speekify --help` and `speekify setup --help`
+- the formula installs `share/man/man1/speekify.1`
+- the formula test checks `speekify --help`, `speekify --version`, and `speekify setup --help`
 
 ### 9. Publish the Homebrew formula in the tap repository
 
@@ -187,6 +188,7 @@ At that point, end users can install with:
 ```bash
 brew tap OtterlySpaceLabs/speekify
 brew install speekify
+man speekify
 speekify setup
 ```
 

@@ -1,0 +1,135 @@
+.TH SPEEKIFY 1 "May 2026" "Speekify" "User Commands"
+.SH NAME
+speekify \- convert inline text, stdin, or readable URL content into a local WAV file
+.SH SYNOPSIS
+.B speekify
+[
+.I OPTIONS
+]
+[
+.I SOURCE ...
+]
+.PP
+.B speekify
+.B setup
+[
+.I OPTIONS
+]
+.SH DESCRIPTION
+Speekify is a Python CLI that turns inline text, piped stdin, or the readable body of a URL into a local WAV file generated with Supertonic v3.
+.PP
+The default workflow accepts plain text, piped text, or a single URL. URL input is reduced to readable article content before synthesis. English input can be translated to French before text to speech, and sparse speech tags can be added before generation.
+.PP
+Use
+.B speekify setup
+to pre-download and warm the local AI models.
+Use
+.B speekify --doctor
+to verify the runtime dependencies, confirm that the AI models load correctly, and get a remediation hint when setup is required.
+.SH ARGUMENTS
+.TP
+.I SOURCE
+Text to synthesize or a single URL to extract. Omit it only when text is piped on stdin.
+.SH MAIN OPTIONS
+.TP
+.B --url
+Force URL extraction mode even if the source looks like plain text.
+.TP
+.B --title
+Override the output file name without the extension.
+.TP
+.B --voice
+Select a Supertonic voice from M1-M5 or F1-F5.
+.TP
+.B --custom-style-path
+Use a Supertonic voice-style JSON file. This overrides
+.BR --voice .
+.TP
+.B --lang
+Select the Supertonic ISO 639-1 language code such as en, fr, ja, or na.
+.TP
+.B --speed
+Adjust the playback speed multiplier.
+.TP
+.B --steps
+Set the synthesis step count.
+.TP
+.B --max-chunk-length
+Set the maximum internal Supertonic chunk length.
+.TP
+.B --silence-duration
+Set the silence inserted between Supertonic chunks.
+.TP
+.B --output-dir
+Write the generated WAV file into a specific directory.
+.TP
+.B --tags / --no-tags
+Enable or disable sparse inline speech tags.
+.TP
+.B --tag-sentiment / --no-tag-sentiment
+Enable or disable CardiffNLP sentiment-assisted tagging.
+.TP
+.B --tag-sigh / --no-tag-sigh
+Enable or disable rare sigh tags.
+.TP
+.B --verbose
+Show technical diagnostics such as the log file path.
+.TP
+.B --version
+.TP
+.B -v
+Print the installed Speekify version and exit.
+.TP
+.B --doctor
+Run installation diagnostics, verify runtime dependencies, attempt to load the AI models, and suggest
+.B speekify setup
+when repair or download is required.
+.TP
+.B -h
+.TP
+.B --help
+Show the command help and exit.
+.SH SETUP OPTIONS
+.TP
+.B --skip-translation
+Do not warm up the English to French translation model.
+.TP
+.B --skip-sentiment
+Do not warm up the CardiffNLP emotion and sentiment model.
+.TP
+.B --verbose
+Show technical diagnostics such as the log file path.
+.TP
+.B -h
+.TP
+.B --help
+Show setup help and exit.
+.SH EXAMPLES
+.TP
+.B speekify "Hello world"
+Generate a WAV file from inline text.
+.TP
+.B speekify --lang fr "Hello world"
+Generate French speech.
+.TP
+.B speekify https://example.com/article
+Extract readable article text and synthesize it.
+.TP
+.B printf 'Hello from stdin' | speekify
+Read the text from standard input.
+.TP
+.B speekify --doctor
+Check dependencies, model availability, and installation health.
+.TP
+.B speekify setup
+Download and warm the local AI models.
+.SH FILES
+.TP
+.I logs/speekify.log
+Runtime log file maintained automatically by the CLI.
+.SH EXIT STATUS
+The command exits with status 0 on success and non-zero on failure. The
+.B --doctor
+command exits non-zero when dependencies are missing or when one of the models cannot be loaded.
+.SH SEE ALSO
+.BR man (1)

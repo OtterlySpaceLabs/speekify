@@ -3,7 +3,7 @@ from __future__ import annotations
 from io import StringIO
 import re
 
-from speekify.__main__ import main
+from speekify.__main__ import _build_doctor_report, main
 from speekify.extract import ExtractedContent
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationResult
@@ -389,6 +389,9 @@ def test_main_help_lists_supported_languages(capsys) -> None:
         assert "Supported languages:" in stdout
         assert "en, ko, ja" in stdout
         assert "speekify --lang fr" in stdout
+        assert "Maintenance:" in stdout
+        assert "speekify --version" in stdout
+        assert "speekify --doctor" in stdout
     else:
         raise AssertionError("main() should exit after printing help")
 
@@ -429,6 +432,102 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
 
     assert exit_code == 0
     assert str(tmp_path / "stdin.wav") in stdout
+
+
+def test_main_prints_version(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("speekify.__main__._get_version", lambda: "9.9.9")
+
+    exit_code = main(["--version"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "9.9.9" in stdout
+
+
+def test_main_short_version_flag_prints_version(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("speekify.__main__._get_version", lambda: "9.9.9")
+
+    exit_code = main(["-v"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "9.9.9" in stdout
+
+
+def test_main_doctor_reports_runtime(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "speekify.__main__._build_doctor_report",
+        lambda: [
+            ("Version", "0.0.3", "ok"),
+            ("Python", "3.11.9", "ok"),
+            ("Supertonic model", "ready", "ok"),
+            ("Dependency supertonic", "available", "ok"),
+        ],
+    )
+
+    exit_code = main(["--doctor"])
+    stdout = _normalize_console_output(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert "Doctor" in stdout
+    assert "Version" in stdout
+    assert "0.0.3" in stdout
+    assert "Doctor checks passed." in stdout
+
+
+def test_main_doctor_fails_when_dependency_is_missing(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "speekify.__main__._build_doctor_report",
+        lambda: [("Dependency supertonic", "missing", "error")],
+    )
+
+    exit_code = main(["--doctor"])
+    captured = capsys.readouterr()
+    stdout = _normalize_console_output(captured.out)
+    stderr = _normalize_console_output(captured.err)
+
+    assert exit_code == 1
+    assert "Dependency supertonic" in stdout
+    assert "missing" in stdout
+    assert "Doctor found one or more problems." in stderr
+    assert "speekify setup" in stderr
+
+
+def test_build_doctor_report_checks_dependencies_and_models(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "speekify.__main__.configure_logger",
+        lambda verbose=False: (object(), tmp_path / "logs" / "speekify.log"),
+    )
+    monkeypatch.setattr(
+        "speekify.__main__._doctor_runtime_report",
+        lambda log_path: [("Log path", str(log_path), "ok")],
+    )
+    monkeypatch.setattr(
+        "speekify.__main__._doctor_dependencies",
+        lambda: (("supertonic", "Dependency supertonic"),),
+    )
+    monkeypatch.setattr(
+        "speekify.__main__._check_dependency",
+        lambda module_name, *, label: (label, f"checked {module_name}", "ok"),
+    )
+    monkeypatch.setattr(
+        "speekify.__main__._doctor_model_checks",
+        lambda: (("Supertonic model", lambda: "engine"), ("Translation model", lambda: "backend")),
+    )
+    monkeypatch.setattr(
+        "speekify.__main__._check_model_load",
+        lambda label, *, load_model, logger: (label, str(load_model()), "ok"),
+    )
+
+    report = _build_doctor_report()
+
+    assert report == [
+        ("Log path", str(tmp_path / "logs" / "speekify.log"), "ok"),
+        ("Dependency supertonic", "checked supertonic", "ok"),
+        ("Supertonic model", "engine", "ok"),
+        ("Translation model", "backend", "ok"),
+    ]
 
 
 def test_main_setup_warms_supertonic_translation_and_sentiment(monkeypatch, capsys) -> None:

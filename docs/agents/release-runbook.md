@@ -310,6 +310,7 @@ shasum -a 256 speekify.tar.gz
 tar -xzf speekify.tar.gz
 ./speekify --help >/dev/null
 ./speekify setup --help >/dev/null
+MANPATH="$TMPDIR/share/man${MANPATH:+:$MANPATH}" man speekify >/dev/null
 ```
 
 Verification du tap Homebrew public sans modifier l'installation locale:
@@ -324,6 +325,7 @@ Resultat attendu:
 - le SHA256 du telechargement public correspond a celui de l'archive locale publiee
 - la formule Homebrew passe `brew audit --strict`
 - `brew fetch` reussit sur la formule publiee sans installer ni desinstaller `speekify`
+- la page de manuel `speekify.1` est presente et exploitable via `man speekify`
 
 ## 13. Checklist finale
 
@@ -343,6 +345,7 @@ Resultat attendu:
 - [ ] la formule Homebrew a ete committee et poussee dans le tap public
 - [ ] le telechargement public direct fonctionne
 - [ ] la formule Homebrew passe `brew audit --strict` et `brew fetch` sans modifier l'installation locale
+- [ ] la page `man speekify` fonctionne avec l'archive publiee ou via l'installation Homebrew
 
 ## 14. Procedure de rollback ou points de vigilance
 
