@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import httpx
 
@@ -80,4 +82,60 @@ async def test_extract_url_uses_medium_feed_fallback_on_blocked_article(monkeypa
     assert content.title == "Article Medium"
     assert content.text == (
         "Intro with link.\n\nSecond paragraph with enough text to satisfy the minimum length."
+    )
+
+
+@pytest.mark.asyncio
+async def test_extract_url_uses_medium_feed_fallback_on_custom_domain(monkeypatch, caplog) -> None:
+    article_url = (
+        "https://uxdesign.cc/"
+        "designing-with-claude-code-and-codex-cli-building-ai-driven-workflows-powered-by-code-connect-ui-f10c136ec11f"
+    )
+    feed_url = "https://uxdesign.cc/feed/"
+    feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <item>
+      <title><![CDATA[Custom Medium Domain]]></title>
+      <link><![CDATA[https://uxdesign.cc/designing-with-claude-code-and-codex-cli-building-ai-driven-workflows-powered-by-code-connect-ui-f10c136ec11f?source=rss]]></link>
+      <guid isPermaLink="false">https://medium.com/p/f10c136ec11f</guid>
+      <content:encoded><![CDATA[
+        <p>Custom domain intro paragraph.</p>
+        <p>Another paragraph with enough content to exceed the minimum length.</p>
+      ]]></content:encoded>
+    </item>
+  </channel>
+</rss>
+"""
+
+    class FakeAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+            request = httpx.Request("GET", url, headers=headers)
+            if url == article_url:
+                return httpx.Response(403, request=request, text="forbidden")
+            if url == feed_url:
+                return httpx.Response(200, request=request, text=feed_xml)
+            raise AssertionError(f"unexpected URL {url}")
+
+    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+    caplog.set_level(logging.INFO, logger="speekify")
+
+    content = await extract_url(article_url, min_chars=40)
+
+    assert content.title == "Custom Medium Domain"
+    assert content.text == (
+        "Custom domain intro paragraph.\n\nAnother paragraph with enough content to exceed the minimum length."
+    )
+    assert any(
+        record.message.startswith("Medium feed fallback triggered url=https://uxdesign.cc/")
+        for record in caplog.records
     )

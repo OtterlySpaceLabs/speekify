@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -11,6 +12,9 @@ import httpx
 import trafilatura
 
 from speekify.config import MIN_URL_TEXT_LENGTH
+from speekify.logging_utils import LOGGER_NAME
+
+logger = logging.getLogger(LOGGER_NAME)
 
 DEFAULT_FETCH_HEADERS = {
     "User-Agent": (
@@ -73,6 +77,7 @@ def is_single_url_input(text: str) -> bool:
 
 async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> ExtractedContent:
     validated_url = validate_url(url)
+    should_attempt_medium_feed = False
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
         direct_error: httpx.HTTPError | None = None
         try:
@@ -83,17 +88,27 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
                 return extracted
         except httpx.HTTPStatusError as exc:
             direct_error = exc
-            if not _should_retry_with_medium_feed(validated_url, exc.response):
+            should_attempt_medium_feed = _should_retry_with_medium_feed(validated_url, exc.response)
+            if not should_attempt_medium_feed:
                 raise
         except httpx.HTTPError as exc:
             direct_error = exc
 
-        if _is_medium_article_url(validated_url):
-            extracted = await _extract_medium_article_from_feed(
-                client,
+        if should_attempt_medium_feed:
+            logger.info(
+                "Medium feed fallback triggered url=%s status_code=%s feed_url=%s",
                 validated_url,
-                min_chars=min_chars,
+                getattr(getattr(direct_error, "response", None), "status_code", None),
+                _build_medium_feed_url(validated_url),
             )
+            try:
+                extracted = await _extract_medium_article_from_feed(
+                    client,
+                    validated_url,
+                    min_chars=min_chars,
+                )
+            except httpx.HTTPError:
+                extracted = None
             if extracted is not None:
                 return extracted
 
@@ -119,14 +134,24 @@ def _extract_from_html(html_text: str, min_chars: int) -> ExtractedContent | Non
 
 
 def _should_retry_with_medium_feed(url: str, response: httpx.Response) -> bool:
-    return _is_medium_article_url(url) and response.status_code in {401, 403, 429}
+    return _looks_like_medium_article_url(url) and response.status_code in {401, 403, 429}
 
 
-def _is_medium_article_url(url: str) -> bool:
+def _looks_like_medium_article_url(url: str) -> bool:
     parsed = urlparse(url)
     host = parsed.netloc.lower()
     path_segments = [segment for segment in parsed.path.split("/") if segment]
-    return host.endswith("medium.com") and len(path_segments) >= 2
+    if host.endswith("medium.com") and len(path_segments) >= 2:
+        return True
+
+    if len(path_segments) != 1:
+        return False
+
+    publication_or_author = path_segments[0].lower()
+    if publication_or_author in {"feed", "tag", "topics", "search", "about", "p"}:
+        return False
+
+    return _extract_medium_article_id(url) is not None
 
 
 async def _extract_medium_article_from_feed(
@@ -146,6 +171,12 @@ async def _extract_medium_article_from_feed(
 def _build_medium_feed_url(article_url: str) -> str | None:
     parsed = urlparse(article_url)
     path_segments = [segment for segment in parsed.path.split("/") if segment]
+    if not path_segments:
+        return None
+
+    if not parsed.netloc.lower().endswith("medium.com"):
+        return f"{parsed.scheme}://{parsed.netloc}/feed/"
+
     if len(path_segments) < 2:
         return None
 

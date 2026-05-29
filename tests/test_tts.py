@@ -232,7 +232,8 @@ def test_synthesizer_uses_language_chunk_limit_for_single_long_sentence(tmp_path
         silence_duration=0.3,
     )
 
-    assert artifact.batch_count == 1
-    assert fake.calls == [text]
-    assert fake.max_chunk_lengths == [300]
+    assert artifact.batch_count > 1
+    assert "".join(fake.calls) == text
+    assert fake.max_chunk_lengths == [300] * artifact.batch_count
+    assert all(len(call) <= 300 for call in fake.calls)
     assert output.read_bytes() == b"wav"

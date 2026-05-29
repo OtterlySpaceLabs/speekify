@@ -217,6 +217,7 @@ class SupertonicSynthesizer:
         batches = self.split_text_into_batches(
             prepared_text.text,
             max_batch_length=max_batch_length,
+            preferred_chunk_length=synthesize_chunk_length,
         )
 
         wav_list: list[np.ndarray] = []
