@@ -1,7 +1,31 @@
 from datetime import datetime
 import logging
 
+import pytest
+
 from speekify.logging_utils import configure_logger
+
+
+@pytest.fixture(autouse=True)
+def restore_logger_state() -> None:
+    speekify_logger = logging.getLogger("speekify")
+    original_handlers = speekify_logger.handlers[:]
+    original_level = speekify_logger.level
+    original_propagate = speekify_logger.propagate
+
+    third_party_loggers = {
+        name: logging.getLogger(name).level
+        for name in ("huggingface_hub", "transformers")
+    }
+
+    yield
+
+    speekify_logger.handlers = original_handlers
+    speekify_logger.setLevel(original_level)
+    speekify_logger.propagate = original_propagate
+
+    for logger_name, logger_level in third_party_loggers.items():
+        logging.getLogger(logger_name).setLevel(logger_level)
 
 
 def test_configure_logger_quiets_third_party_model_loggers(tmp_path) -> None:

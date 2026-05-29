@@ -6,6 +6,24 @@ import httpx
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text, validate_url
 
 
+@pytest.fixture(autouse=True)
+def reset_speekify_logger() -> None:
+    speekify_logger = logging.getLogger("speekify")
+    original_handlers = speekify_logger.handlers[:]
+    original_level = speekify_logger.level
+    original_propagate = speekify_logger.propagate
+
+    speekify_logger.handlers = []
+    speekify_logger.setLevel(logging.NOTSET)
+    speekify_logger.propagate = True
+
+    yield
+
+    speekify_logger.handlers = original_handlers
+    speekify_logger.setLevel(original_level)
+    speekify_logger.propagate = original_propagate
+
+
 def test_normalize_text_strips_repeated_blank_lines() -> None:
     raw = "  Bonjour   le monde\n\n\nCeci est   un test.  "
     assert normalize_text(raw) == "Bonjour le monde\n\nCeci est un test."
