@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 import numpy as np
 
-from speekify.tts import SynthesisArtifact, SupertonicSynthesizer
+from speekify.multilingual import FrenchEnglishIslandSegmenter, LanguageSegment
+from speekify.tts import PreparedText, SynthesisArtifact, SupertonicSynthesizer
 
 
 class FakeTTS:
@@ -237,3 +238,142 @@ def test_synthesizer_uses_language_chunk_limit_for_single_long_sentence(tmp_path
     assert fake.max_chunk_lengths == [300] * artifact.batch_count
     assert all(len(call) <= 300 for call in fake.calls)
     assert output.read_bytes() == b"wav"
+
+
+def test_french_english_segmenter_detects_lexicon_islands() -> None:
+    segmenter = FrenchEnglishIslandSegmenter()
+
+    segments = segmenter.segment(
+        "Ce prompt améliore le workflow de ton LLM powered app.",
+        default_lang="fr",
+        english_lang="en",
+    )
+
+    assert segments == (
+        LanguageSegment(text="Ce ", lang="fr"),
+        LanguageSegment(text="prompt", lang="en"),
+        LanguageSegment(text=" améliore le ", lang="fr"),
+        LanguageSegment(text="workflow", lang="en"),
+        LanguageSegment(text=" de ton ", lang="fr"),
+        LanguageSegment(text="LLM powered app", lang="en"),
+        LanguageSegment(text=".", lang="fr"),
+    )
+
+
+def test_french_english_segmenter_avoids_lowercase_acronym_false_positive() -> None:
+    segmenter = FrenchEnglishIslandSegmenter()
+
+    segments = segmenter.segment("J ai un prompt utile.", default_lang="fr", english_lang="en")
+
+    assert segments == (
+        LanguageSegment(text="J ai un ", lang="fr"),
+        LanguageSegment(text="prompt", lang="en"),
+        LanguageSegment(text=" utile.", lang="fr"),
+    )
+
+
+class FakeMultilingualTTS(FakeBatchingTTS):
+    def synthesize(
+        self,
+        text: str,
+        *,
+        voice_style: str,
+        lang: str,
+        total_steps: int,
+        speed: float,
+        silence_duration: float,
+        max_chunk_length: int | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        assert voice_style == "style:M1"
+        self.calls.append(f"{lang}:{text}")
+        self.max_chunk_lengths.append(max_chunk_length)
+        wav = np.ones((1, len(text)), dtype=np.float32)
+        duration = np.array([len(text) / 10], dtype=np.float32)
+        return wav, duration
+
+
+def test_synthesizer_uses_english_for_french_lexicon_segments() -> None:
+    fake = FakeMultilingualTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    prepared_text = PreparedText(
+        original_text="Ce prompt améliore le workflow.",
+        text="Ce prompt améliore le workflow.",
+        reformatted=False,
+        removed_characters=(),
+        removed_character_count=0,
+    )
+
+    artifact = synth.synthesize_prepared_text(
+        prepared_text=prepared_text,
+        voice="M1",
+        lang="fr",
+        steps=8,
+        speed=1.0,
+        silence_duration=0.3,
+    )
+
+    assert fake.calls == [
+        "fr:Ce",
+        "en:prompt",
+        "fr:améliore le",
+        "en:workflow.",
+    ]
+    assert artifact.language_segments == (
+        LanguageSegment(text="Ce ", lang="fr"),
+        LanguageSegment(text="prompt", lang="en"),
+        LanguageSegment(text=" améliore le ", lang="fr"),
+        LanguageSegment(text="workflow", lang="en"),
+        LanguageSegment(text=".", lang="fr"),
+    )
+    assert artifact.summary_notes() == ["English pronunciation islands: 'prompt', 'workflow'"]
+    assert artifact.duration_seconds == pytest.approx(len("Cepromptaméliore leworkflow.") / 10)
+
+
+def test_synthesizer_accepts_custom_english_lexicon_terms() -> None:
+    fake = FakeMultilingualTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    prepared_text = PreparedText(
+        original_text="Ce retrieval augmente la qualité.",
+        text="Ce retrieval augmente la qualité.",
+        reformatted=False,
+        removed_characters=(),
+        removed_character_count=0,
+    )
+
+    artifact = synth.synthesize_prepared_text(
+        prepared_text=prepared_text,
+        voice="M1",
+        lang="fr",
+        steps=8,
+        speed=1.0,
+        silence_duration=0.3,
+        english_lexicon_terms=("retrieval",),
+    )
+
+    assert fake.calls == ["fr:Ce", "en:retrieval", "fr:augmente la qualité."]
+    assert artifact.summary_notes() == ["English pronunciation islands: 'retrieval'"]
+
+
+def test_synthesizer_can_disable_english_island_detection() -> None:
+    fake = FakeMultilingualTTS(model="supertonic-3")
+    synth = SupertonicSynthesizer(engine=fake)
+    prepared_text = PreparedText(
+        original_text="Ce prompt reste français.",
+        text="Ce prompt reste français.",
+        reformatted=False,
+        removed_characters=(),
+        removed_character_count=0,
+    )
+
+    artifact = synth.synthesize_prepared_text(
+        prepared_text=prepared_text,
+        voice="M1",
+        lang="fr",
+        steps=8,
+        speed=1.0,
+        silence_duration=0.3,
+        detect_english_islands=False,
+    )
+
+    assert fake.calls == ["fr:Ce prompt reste français."]
+    assert artifact.summary_notes() == []

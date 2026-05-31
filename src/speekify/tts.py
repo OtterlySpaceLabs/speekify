@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from speekify.config import MODEL_NAME, SUPPORTED_TTS_LANGUAGES
+from speekify.multilingual import FrenchEnglishIslandSegmenter, LanguageSegment
 
 try:
     from supertonic import TTS
@@ -42,9 +43,7 @@ class PreparedText:
         if self.removed_character_count:
             preview = ", ".join(repr(char) for char in self.removed_characters[:6])
             suffix = ", ..." if len(self.removed_characters) > 6 else ""
-            notes.append(
-                f"{self.removed_character_count} character(s) removed: {preview}{suffix}"
-            )
+            notes.append(f"{self.removed_character_count} character(s) removed: {preview}{suffix}")
         return notes
 
 
@@ -54,9 +53,20 @@ class SynthesisArtifact:
     duration_seconds: float
     batch_count: int
     prepared_text: PreparedText
+    language_segments: tuple[LanguageSegment, ...] = ()
 
     def summary_notes(self) -> list[str]:
-        return self.prepared_text.summary_notes()
+        notes = self.prepared_text.summary_notes()
+        english_segments = [
+            segment.text.strip()
+            for segment in self.language_segments
+            if segment.lang == "en" and segment.text.strip()
+        ]
+        if english_segments:
+            preview = ", ".join(repr(segment) for segment in english_segments[:5])
+            suffix = ", ..." if len(english_segments) > 5 else ""
+            notes.append(f"English pronunciation islands: {preview}{suffix}")
+        return notes
 
 
 class SupertonicSynthesizer:
@@ -105,9 +115,7 @@ class SupertonicSynthesizer:
                 )
 
         if not prepared_text.strip():
-            raise ValueError(
-                "The text no longer contains usable content after automatic cleanup."
-            )
+            raise ValueError("The text no longer contains usable content after automatic cleanup.")
 
         return PreparedText(
             original_text=original_text,
@@ -154,6 +162,8 @@ class SupertonicSynthesizer:
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
         max_chunk_length: int | None = None,
+        detect_english_islands: bool = True,
+        english_lexicon_terms: tuple[str, ...] | None = None,
     ) -> SynthesisArtifact:
         prepared_text = self.prepare_text(text)
         artifact = self.synthesize_prepared_text(
@@ -166,6 +176,8 @@ class SupertonicSynthesizer:
             silence_duration=silence_duration,
             max_batch_length=max_batch_length,
             max_chunk_length=max_chunk_length,
+            detect_english_islands=detect_english_islands,
+            english_lexicon_terms=english_lexicon_terms,
         )
         self.save_audio(artifact.wav, output_path)
         return artifact
@@ -182,6 +194,8 @@ class SupertonicSynthesizer:
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
         max_chunk_length: int | None = None,
+        detect_english_islands: bool = True,
+        english_lexicon_terms: tuple[str, ...] | None = None,
     ) -> tuple[Any, float]:
         artifact = self.synthesize_prepared_text(
             prepared_text=self.prepare_text(text),
@@ -193,6 +207,8 @@ class SupertonicSynthesizer:
             silence_duration=silence_duration,
             max_batch_length=max_batch_length,
             max_chunk_length=max_chunk_length,
+            detect_english_islands=detect_english_islands,
+            english_lexicon_terms=english_lexicon_terms,
         )
         return artifact.wav, artifact.duration_seconds
 
@@ -208,25 +224,33 @@ class SupertonicSynthesizer:
         silence_duration: float,
         max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
         max_chunk_length: int | None = None,
+        detect_english_islands: bool = True,
+        english_lexicon_terms: tuple[str, ...] | None = None,
     ) -> SynthesisArtifact:
         normalized_lang = self.validate_language_code(lang)
         engine = self.engine
         style = self._resolve_voice_style(engine, voice=voice, voice_style_path=voice_style_path)
-        synthesize_chunk_length = max_chunk_length or self._default_chunk_length(normalized_lang)
         accepts_max_chunk_length = self._engine_accepts_max_chunk_length(engine)
-        batches = self.split_text_into_batches(
+        language_segments = self._language_segments(
             prepared_text.text,
+            lang=normalized_lang,
+            detect_english_islands=detect_english_islands,
+            english_lexicon_terms=english_lexicon_terms,
+        )
+        batches = self._segment_batches(
+            language_segments,
             max_batch_length=max_batch_length,
-            preferred_chunk_length=synthesize_chunk_length,
+            max_chunk_length=max_chunk_length,
         )
 
         wav_list: list[np.ndarray] = []
         duration_seconds = 0.0
 
-        for batch in batches:
+        for batch, batch_lang in batches:
+            synthesize_chunk_length = max_chunk_length or self._default_chunk_length(batch_lang)
             synthesize_kwargs = {
                 "voice_style": style,
-                "lang": normalized_lang,
+                "lang": batch_lang,
                 "total_steps": steps,
                 "speed": speed,
                 "silence_duration": silence_duration,
@@ -237,19 +261,65 @@ class SupertonicSynthesizer:
             wav_list.append(wav)
             duration_seconds += self._duration_to_float(duration)
 
+        merge_silence_duration = (
+            0.0 if self._has_language_switch(language_segments) else silence_duration
+        )
         merged_wav = self._merge_batches(
             wav_list,
-            silence_duration=silence_duration,
+            silence_duration=merge_silence_duration,
             sample_rate=int(getattr(engine, "sample_rate", 24_000)),
         )
-        duration_seconds += silence_duration * max(0, len(wav_list) - 1)
+        duration_seconds += merge_silence_duration * max(0, len(wav_list) - 1)
 
         return SynthesisArtifact(
             wav=merged_wav,
             duration_seconds=duration_seconds,
             batch_count=len(wav_list),
             prepared_text=prepared_text,
+            language_segments=language_segments,
         )
+
+    def _language_segments(
+        self,
+        text: str,
+        *,
+        lang: str,
+        detect_english_islands: bool,
+        english_lexicon_terms: tuple[str, ...] | None,
+    ) -> tuple[LanguageSegment, ...]:
+        if lang != "fr" or not detect_english_islands:
+            return (LanguageSegment(text=text, lang=lang),)
+        segmenter = FrenchEnglishIslandSegmenter(english_terms=english_lexicon_terms)
+        return segmenter.segment(text, default_lang=lang, english_lang="en")
+
+    def _segment_batches(
+        self,
+        segments: tuple[LanguageSegment, ...],
+        *,
+        max_batch_length: int,
+        max_chunk_length: int | None,
+    ) -> list[tuple[str, str]]:
+        batches: list[tuple[str, str]] = []
+        for segment in segments:
+            if self._is_punctuation_only(segment.text) and batches:
+                previous_text, previous_lang = batches[-1]
+                batches[-1] = (f"{previous_text}{segment.text.strip()}", previous_lang)
+                continue
+            preferred_chunk_length = max_chunk_length or self._default_chunk_length(segment.lang)
+            for batch in self.split_text_into_batches(
+                segment.text,
+                max_batch_length=max_batch_length,
+                preferred_chunk_length=preferred_chunk_length,
+            ):
+                batches.append((batch, segment.lang))
+        return batches
+
+    def _is_punctuation_only(self, text: str) -> bool:
+        stripped_text = text.strip()
+        return bool(stripped_text) and not any(char.isalnum() for char in stripped_text)
+
+    def _has_language_switch(self, segments: tuple[LanguageSegment, ...]) -> bool:
+        return len({segment.lang for segment in segments}) > 1
 
     def validate_language_code(self, lang: str) -> str:
         normalized = lang.strip().lower()
@@ -306,7 +376,10 @@ class SupertonicSynthesizer:
 
         batches: list[str] = []
         while len(remaining) > max_batch_length:
-            split_at = max(remaining.rfind("\n", 0, max_batch_length), remaining.rfind(" ", 0, max_batch_length))
+            split_at = max(
+                remaining.rfind("\n", 0, max_batch_length),
+                remaining.rfind(" ", 0, max_batch_length),
+            )
             if split_at <= 0:
                 split_at = max_batch_length
             candidate = remaining[:split_at].strip()

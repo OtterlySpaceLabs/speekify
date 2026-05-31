@@ -45,7 +45,7 @@ def _build_cli_epilog() -> str:
         "Examples:",
         '  speekify "Hello world"',
         '  speekify --lang fr "Hello world"',
-        '  speekify --lang ja https://example.com/article',
+        "  speekify --lang ja https://example.com/article",
         "  printf 'Hello from stdin' | speekify",
         "",
         "Maintenance:",
@@ -72,8 +72,7 @@ def _parse_language_code(value: str) -> str:
     if normalized not in SUPPORTED_TTS_LANGUAGES:
         available = ", ".join(SUPPORTED_TTS_LANGUAGES)
         raise typer.BadParameter(
-            "Language code must be supported by Supertonic. "
-            f"Available values: {available}"
+            f"Language code must be supported by Supertonic. Available values: {available}"
         )
     return normalized
 
@@ -155,6 +154,20 @@ SilenceDurationOption = Annotated[
         help="Silence between Supertonic chunks in seconds.",
     ),
 ]
+EnglishIslandsOption = Annotated[
+    bool,
+    typer.Option(
+        "--english-islands/--no-english-islands",
+        help="Pronounce known English tech terms as English islands when --lang fr.",
+    ),
+]
+EnglishLexiconPathOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--english-lexicon-path",
+        help="Optional newline-delimited lexicon of English terms for French synthesis.",
+    ),
+]
 OutputDirOption = Annotated[
     Path | None,
     typer.Option("--output-dir", help="Directory where the WAV file is written."),
@@ -211,6 +224,8 @@ setup_app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+
+
 @generation_app.command(help=GENERATION_HELP)
 def generation_command(
     source: SourceArgument = None,
@@ -223,6 +238,8 @@ def generation_command(
     steps: StepsOption = DEFAULT_STEPS,
     max_chunk_length: MaxChunkLengthOption = None,
     silence_duration: SilenceDurationOption = DEFAULT_SILENCE_DURATION,
+    english_islands: EnglishIslandsOption = True,
+    english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
     tags: TagsOption = True,
     tag_sentiment: TagSentimentOption = True,
@@ -240,6 +257,8 @@ def generation_command(
         steps=steps,
         max_chunk_length=max_chunk_length,
         silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
         tags=tags,
         tag_sentiment=tag_sentiment,
@@ -259,6 +278,8 @@ def setup_command(
         skip_sentiment=skip_sentiment,
         verbose=verbose,
     )
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) == 1 and argv[0] in {"--version", "-v"}:
@@ -301,6 +322,8 @@ def _run_generation(
     steps: int,
     max_chunk_length: int | None,
     silence_duration: float,
+    english_islands: bool,
+    english_lexicon_path: Path | None,
     output_dir: Path | None,
     tags: bool,
     tag_sentiment: bool,
@@ -338,6 +361,8 @@ def _run_generation(
                         steps=steps,
                         max_chunk_length=max_chunk_length,
                         silence_duration=silence_duration,
+                        english_islands=english_islands,
+                        english_lexicon_path=english_lexicon_path,
                         title=title.strip(),
                         is_url_mode=is_url_mode,
                         output_dir=output_dir or Path.cwd(),
@@ -407,8 +432,7 @@ def _build_doctor_report() -> list[tuple[str, str, str]]:
     logger, log_path = configure_logger(verbose=False)
     report = _doctor_runtime_report(log_path)
     report.extend(
-        _check_dependency(module_name, label=label)
-        for module_name, label in _doctor_dependencies()
+        _check_dependency(module_name, label=label) for module_name, label in _doctor_dependencies()
     )
     report.extend(
         _check_model_load(label, load_model=load_model, logger=logger)
