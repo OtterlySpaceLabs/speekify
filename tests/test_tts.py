@@ -70,12 +70,40 @@ class FakeTTSWithValidation(FakeTTS):
         self.model = FakeModel(FakeTextProcessor(is_valid=is_valid, unsupported=unsupported))
 
 
+def _synthesize_and_save(
+    synth: SupertonicSynthesizer,
+    *,
+    text: str,
+    output_path: Path,
+    voice: str,
+    voice_style_path: Path | None = None,
+    lang: str,
+    steps: int,
+    speed: float,
+    silence_duration: float,
+    max_batch_length: int = 1200,
+) -> SynthesisArtifact:
+    artifact = synth.synthesize_prepared_text(
+        prepared_text=synth.prepare_text(text),
+        voice=voice,
+        voice_style_path=voice_style_path,
+        lang=lang,
+        steps=steps,
+        speed=speed,
+        silence_duration=silence_duration,
+        max_batch_length=max_batch_length,
+    )
+    synth.save_audio(artifact.wav, output_path)
+    return artifact
+
+
 def test_synthesizer_saves_audio(tmp_path) -> None:
     fake = FakeTTS(model="supertonic-3")
     synth = SupertonicSynthesizer(engine=fake)
     output = tmp_path / "test.wav"
 
-    artifact = synth.synthesize_to_file(
+    artifact = _synthesize_and_save(
+        synth,
         text="Bonjour",
         output_path=output,
         voice="M1",
@@ -102,7 +130,8 @@ def test_synthesizer_loads_custom_voice_style_path(tmp_path) -> None:
     voice_style_path = tmp_path / "voice.json"
     voice_style_path.write_text("{}", encoding="utf-8")
 
-    artifact = synth.synthesize_to_file(
+    artifact = _synthesize_and_save(
+        synth,
         text="Bonjour",
         output_path=output,
         voice="M1",
@@ -186,7 +215,8 @@ def test_synthesizer_batches_very_long_text_and_merges_audio(tmp_path) -> None:
     synth = SupertonicSynthesizer(engine=fake)
     output = tmp_path / "batched.wav"
 
-    artifact = synth.synthesize_to_file(
+    artifact = _synthesize_and_save(
+        synth,
         text="Bonjour 😀 monde. Encore un peu de texte pour tester le batch auto.",
         output_path=output,
         voice="M1",
@@ -223,7 +253,8 @@ def test_synthesizer_uses_language_chunk_limit_for_single_long_sentence(tmp_path
     output = tmp_path / "single-sentence.wav"
     text = "mot" * 140
 
-    artifact = synth.synthesize_to_file(
+    artifact = _synthesize_and_save(
+        synth,
         text=text,
         output_path=output,
         voice="M1",

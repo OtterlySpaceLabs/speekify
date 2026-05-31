@@ -149,69 +149,6 @@ class SupertonicSynthesizer:
 
         return [batch for batch in batches if batch.strip()]
 
-    def synthesize_to_file(
-        self,
-        *,
-        text: str,
-        output_path: Path,
-        voice: str,
-        voice_style_path: Path | None = None,
-        lang: str,
-        steps: int,
-        speed: float,
-        silence_duration: float,
-        max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
-        max_chunk_length: int | None = None,
-        detect_english_islands: bool = True,
-        english_lexicon_terms: tuple[str, ...] | None = None,
-    ) -> SynthesisArtifact:
-        prepared_text = self.prepare_text(text)
-        artifact = self.synthesize_prepared_text(
-            prepared_text=prepared_text,
-            voice=voice,
-            voice_style_path=voice_style_path,
-            lang=lang,
-            steps=steps,
-            speed=speed,
-            silence_duration=silence_duration,
-            max_batch_length=max_batch_length,
-            max_chunk_length=max_chunk_length,
-            detect_english_islands=detect_english_islands,
-            english_lexicon_terms=english_lexicon_terms,
-        )
-        self.save_audio(artifact.wav, output_path)
-        return artifact
-
-    def synthesize(
-        self,
-        *,
-        text: str,
-        voice: str,
-        voice_style_path: Path | None = None,
-        lang: str,
-        steps: int,
-        speed: float,
-        silence_duration: float,
-        max_batch_length: int = SUPERTONIC_MAX_TEXT_LENGTH,
-        max_chunk_length: int | None = None,
-        detect_english_islands: bool = True,
-        english_lexicon_terms: tuple[str, ...] | None = None,
-    ) -> tuple[Any, float]:
-        artifact = self.synthesize_prepared_text(
-            prepared_text=self.prepare_text(text),
-            voice=voice,
-            voice_style_path=voice_style_path,
-            lang=lang,
-            steps=steps,
-            speed=speed,
-            silence_duration=silence_duration,
-            max_batch_length=max_batch_length,
-            max_chunk_length=max_chunk_length,
-            detect_english_islands=detect_english_islands,
-            english_lexicon_terms=english_lexicon_terms,
-        )
-        return artifact.wav, artifact.duration_seconds
-
     def synthesize_prepared_text(
         self,
         *,

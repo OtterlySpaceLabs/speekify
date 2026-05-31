@@ -35,7 +35,7 @@ def test_main_without_input_requires_source(monkeypatch, capsys) -> None:
 def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+    async def fake_run_generation(request, **_: object) -> GenerationResult:
         assert request.source_text == "Hello from the CLI"
         assert request.output_dir == tmp_path
         assert request.language_code == "fr"
@@ -61,9 +61,7 @@ def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypat
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["Hello", "from", "the", "CLI"])
     stdout = capsys.readouterr().out
@@ -76,7 +74,7 @@ def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypat
 def test_main_passes_explicit_language_code(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+    async def fake_run_generation(request, **_: object) -> GenerationResult:
         assert request.language_code == "fr"
         return GenerationResult(
             output_path=tmp_path / "fr.wav",
@@ -95,9 +93,7 @@ def test_main_passes_explicit_language_code(tmp_path, monkeypatch, capsys) -> No
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["--lang", "fr", "Hello"])
     stdout = capsys.readouterr().out
@@ -111,7 +107,7 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
     voice_style_path = tmp_path / "voice.json"
     voice_style_path.write_text("{}", encoding="utf-8")
 
-    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+    async def fake_run_generation(request, **_: object) -> GenerationResult:
         assert request.voice_style_path == voice_style_path
         assert request.max_chunk_length == 240
         assert request.silence_duration == 0.2
@@ -133,9 +129,7 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(
         [
@@ -178,11 +172,11 @@ def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) 
         assert getattr(tagging_config, "enable_sigh") is True
         return fake_tagger
 
-    async def fake_generate_audio(request, **kwargs: object) -> GenerationResult:
+    async def fake_run_generation(request, **kwargs: object) -> GenerationResult:
         assert request.tagging_config.enabled is True
         assert request.tagging_config.use_sentiment is True
         assert request.tagging_config.enable_sigh is True
-        assert kwargs["tagger"] is fake_tagger
+        assert callable(kwargs["dependency_builder"])
         return GenerationResult(
             output_path=tmp_path / "emotion-tags.wav",
             artifact=SynthesisArtifact(
@@ -200,10 +194,7 @@ def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) 
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
-    monkeypatch.setattr("speekify.__main__._build_tagger", fake_build_tagger)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["Hello"])
     stdout = capsys.readouterr().out
@@ -222,11 +213,11 @@ def test_main_can_keep_simple_tag_rules_without_emotion(tmp_path, monkeypatch, c
         assert getattr(tagging_config, "enable_sigh") is False
         return fake_tagger
 
-    async def fake_generate_audio(request, **kwargs: object) -> GenerationResult:
+    async def fake_run_generation(request, **kwargs: object) -> GenerationResult:
         assert request.tagging_config.enabled is True
         assert request.tagging_config.use_sentiment is False
         assert request.tagging_config.enable_sigh is False
-        assert kwargs["tagger"] is fake_tagger
+        assert callable(kwargs["dependency_builder"])
         return GenerationResult(
             output_path=tmp_path / "simple-tags.wav",
             artifact=SynthesisArtifact(
@@ -244,10 +235,7 @@ def test_main_can_keep_simple_tag_rules_without_emotion(tmp_path, monkeypatch, c
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
-    monkeypatch.setattr("speekify.__main__._build_tagger", fake_build_tagger)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["--no-tag-sentiment", "--no-tag-sigh", "Hello"])
     stdout = capsys.readouterr().out
@@ -266,9 +254,9 @@ def test_main_passes_disabled_tagging_config(tmp_path, monkeypatch, capsys) -> N
         assert getattr(tagging_config, "enable_sigh") is False
         return fake_tagger
 
-    async def fake_generate_audio(request, **kwargs: object) -> GenerationResult:
+    async def fake_run_generation(request, **kwargs: object) -> GenerationResult:
         assert request.tagging_config.enabled is False
-        assert kwargs["tagger"] is fake_tagger
+        assert callable(kwargs["dependency_builder"])
         return GenerationResult(
             output_path=tmp_path / "no-tags.wav",
             artifact=SynthesisArtifact(
@@ -286,10 +274,7 @@ def test_main_passes_disabled_tagging_config(tmp_path, monkeypatch, capsys) -> N
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
-    monkeypatch.setattr("speekify.__main__._build_tagger", fake_build_tagger)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["--no-tags", "Hello"])
     stdout = capsys.readouterr().out
@@ -301,7 +286,7 @@ def test_main_passes_disabled_tagging_config(tmp_path, monkeypatch, capsys) -> N
 def test_main_does_not_warn_for_batching_or_reformatting(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+    async def fake_run_generation(request, **_: object) -> GenerationResult:
         return GenerationResult(
             output_path=tmp_path / "batched.wav",
             artifact=SynthesisArtifact(
@@ -319,9 +304,7 @@ def test_main_does_not_warn_for_batching_or_reformatting(tmp_path, monkeypatch, 
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["Hello", "from", "Speekify"])
     stdout = capsys.readouterr().out
@@ -346,12 +329,10 @@ def test_main_rejects_invalid_language_code(capsys) -> None:
 
 
 def test_main_prints_hint_for_unsupported_characters(monkeypatch, capsys) -> None:
-    async def fake_generate_audio(*_: object, **__: object) -> GenerationResult:
+    async def fake_run_generation(*_: object, **__: object) -> GenerationResult:
         raise ValueError("Text contains characters unsupported by Supertonic: '世'")
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["Hello", "世"])
     stderr = capsys.readouterr().err
@@ -362,12 +343,10 @@ def test_main_prints_hint_for_unsupported_characters(monkeypatch, capsys) -> Non
 
 
 def test_main_verbose_prints_log_path_on_error(monkeypatch, capsys) -> None:
-    async def fake_generate_audio(*_: object, **__: object) -> GenerationResult:
+    async def fake_run_generation(*_: object, **__: object) -> GenerationResult:
         raise RuntimeError("Model failed to load")
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["--verbose", "Hello"])
     stderr = capsys.readouterr().err
@@ -381,12 +360,10 @@ def test_main_verbose_prints_log_path_on_error(monkeypatch, capsys) -> None:
 def test_main_writes_generation_errors_to_default_log(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    async def fake_generate_audio(*_: object, **__: object) -> GenerationResult:
+    async def fake_run_generation(*_: object, **__: object) -> GenerationResult:
         raise RuntimeError("Model failed to load")
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["Hello"])
     capsys.readouterr()
@@ -417,7 +394,7 @@ def test_main_help_lists_supported_languages(capsys) -> None:
 def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+    async def fake_run_generation(request, **_: object) -> GenerationResult:
         assert request.source_text == "Hello via stdin"
         return GenerationResult(
             output_path=tmp_path / "stdin.wav",
@@ -440,9 +417,7 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
         def isatty(self) -> bool:
             return False
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
     monkeypatch.setattr("sys.stdin", FakeStdin("Hello via stdin"))
 
     exit_code = main([])
@@ -455,7 +430,7 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
 def test_main_dry_run_renders_inspection(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    async def fake_inspect_generation(request, **_: object):
+    async def fake_run_inspection(request, **_: object):
         from speekify.tts import PreparedText
         from speekify.workflow import GenerationInspection
 
@@ -475,9 +450,7 @@ def test_main_dry_run_renders_inspection(tmp_path, monkeypatch, capsys) -> None:
             source_mode="text",
         )
 
-    monkeypatch.setattr("speekify.__main__.inspect_generation", fake_inspect_generation)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
-    monkeypatch.setattr("speekify.__main__._build_tagger", lambda tagging_config: object())
+    monkeypatch.setattr("speekify.application.run_inspection", fake_run_inspection)
 
     exit_code = main(["--dry-run", "Hello", "preview"])
     stdout = capsys.readouterr().out
@@ -506,7 +479,7 @@ def test_main_uses_user_config_defaults(tmp_path, monkeypatch, capsys) -> None:
     )
     monkeypatch.setenv("SPEEKIFY_CONFIG", str(config_path))
 
-    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+    async def fake_run_generation(request, **_: object) -> GenerationResult:
         assert request.voice == "F4"
         assert request.language_code == "en"
         assert request.speed == 1.3
@@ -530,9 +503,7 @@ def test_main_uses_user_config_defaults(tmp_path, monkeypatch, capsys) -> None:
             content=ExtractedContent(text=request.source_text),
         )
 
-    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
-    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
-    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.application.run_generation", fake_run_generation)
 
     exit_code = main(["Hello"])
     stdout = capsys.readouterr().out

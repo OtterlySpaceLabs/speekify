@@ -6,7 +6,7 @@ import logging
 import os
 import platform
 import sys
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Callable, Sequence
 from importlib import metadata
 from pathlib import Path
 from typing import Annotated, Any
@@ -14,6 +14,7 @@ from typing import Annotated, Any
 import click
 import typer
 
+from speekify import application
 from speekify.cli_rendering import (
     format_status as _format_status,
     render_cli_error as _render_cli_error,
@@ -485,28 +486,13 @@ def _run_generation(
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
     )
-    voice = options["voice"]
-    custom_style_path = options["custom_style_path"]
-    language_code = options["language_code"]
-    speed = options["speed"]
-    steps = options["steps"]
-    max_chunk_length = options["max_chunk_length"]
-    silence_duration = options["silence_duration"]
-    english_islands = options["english_islands"]
-    english_lexicon_path = options["english_lexicon_path"]
-    output_dir = options["output_dir"]
-    feed_base_url = options["feed_base_url"]
-    tags = options["tags"]
-    tag_sentiment = options["tag_sentiment"]
-    tag_sigh = options["tag_sigh"]
-
     logger, log_path = configure_logger(verbose=verbose)
-    tagging_config = _build_tagging_config(
-        enabled=tags,
-        use_sentiment=tag_sentiment,
-        enable_sigh=tag_sigh,
+    request = _build_cli_request(
+        source_text=source_text,
+        is_url_mode=is_url_mode,
+        title=title,
+        options=options,
     )
-    dependencies = _build_generation_dependencies(tagging_config)
 
     try:
         with console.status(_format_status("starting"), spinner="dots") as status:
@@ -515,29 +501,11 @@ def _run_generation(
                 status.update(_format_status(message))
 
             generation = asyncio.run(
-                generate_audio(
-                    _build_generation_request(
-                        source_text=source_text,
-                        voice=voice,
-                        voice_style_path=custom_style_path,
-                        language_code=language_code,
-                        speed=speed,
-                        steps=steps,
-                        max_chunk_length=max_chunk_length,
-                        silence_duration=silence_duration,
-                        english_islands=english_islands,
-                        english_lexicon_path=english_lexicon_path,
-                        title=title.strip(),
-                        is_url_mode=is_url_mode,
-                        output_dir=output_dir or Path.cwd(),
-                        feed_base_url=feed_base_url,
-                        tagging_config=tagging_config,
-                    ),
-                    synthesizer=dependencies.synthesizer,
-                    translator=dependencies.translator,
-                    tagger=dependencies.tagger,
+                application.run_generation(
+                    request,
                     logger=logger,
                     status_callback=update_status,
+                    dependency_builder=_build_generation_dependencies,
                 )
             )
     except Exception as exc:
@@ -590,29 +558,13 @@ def _run_inspection(
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
     )
-    voice = options["voice"]
-    custom_style_path = options["custom_style_path"]
-    language_code = options["language_code"]
-    speed = options["speed"]
-    steps = options["steps"]
-    max_chunk_length = options["max_chunk_length"]
-    silence_duration = options["silence_duration"]
-    english_islands = options["english_islands"]
-    english_lexicon_path = options["english_lexicon_path"]
-    output_dir = options["output_dir"]
-    feed_base_url = options["feed_base_url"]
-    tags = options["tags"]
-    tag_sentiment = options["tag_sentiment"]
-    tag_sigh = options["tag_sigh"]
-
     logger, log_path = configure_logger(verbose=verbose)
-    tagging_config = _build_tagging_config(
-        enabled=tags,
-        use_sentiment=tag_sentiment,
-        enable_sigh=tag_sigh,
+    request = _build_cli_request(
+        source_text=source_text,
+        is_url_mode=is_url_mode,
+        title=title,
+        options=options,
     )
-    translator = _build_translator()
-    tagger = _build_tagger(tagging_config)
 
     try:
         with console.status(_format_status("starting"), spinner="dots") as status:
@@ -621,28 +573,11 @@ def _run_inspection(
                 status.update(_format_status(message))
 
             inspection = asyncio.run(
-                inspect_generation(
-                    _build_generation_request(
-                        source_text=source_text,
-                        voice=voice,
-                        voice_style_path=custom_style_path,
-                        language_code=language_code,
-                        speed=speed,
-                        steps=steps,
-                        max_chunk_length=max_chunk_length,
-                        silence_duration=silence_duration,
-                        english_islands=english_islands,
-                        english_lexicon_path=english_lexicon_path,
-                        title=title.strip(),
-                        is_url_mode=is_url_mode,
-                        output_dir=output_dir or Path.cwd(),
-                        feed_base_url=feed_base_url,
-                        tagging_config=tagging_config,
-                    ),
-                    translator=translator,
-                    tagger=tagger,
+                application.run_inspection(
+                    request,
                     logger=logger,
                     status_callback=update_status,
+                    dependency_builder=_build_generation_dependencies,
                 )
             )
     except Exception as exc:
@@ -770,6 +705,35 @@ def _option_with_config(option_name: str, current_value: Any, configured_value: 
     return current_value
 
 
+def _build_cli_request(
+    *,
+    source_text: str,
+    is_url_mode: bool,
+    title: str,
+    options: dict[str, Any],
+) -> object:
+    return application.build_generation_request(
+        source_text=source_text,
+        is_url_mode=is_url_mode,
+        title=title,
+        voice=options["voice"],
+        custom_style_path=options["custom_style_path"],
+        language_code=options["language_code"],
+        speed=options["speed"],
+        steps=options["steps"],
+        max_chunk_length=options["max_chunk_length"],
+        silence_duration=options["silence_duration"],
+        english_islands=options["english_islands"],
+        english_lexicon_path=options["english_lexicon_path"],
+        output_dir=options["output_dir"] or Path.cwd(),
+        feed_base_url=options["feed_base_url"],
+        tags=options["tags"],
+        tag_sentiment=options["tag_sentiment"],
+        tag_sigh=options["tag_sigh"],
+        use_user_config=False,
+    )
+
+
 def _run_doctor() -> int:
     report = _build_doctor_report()
     has_errors = any(status == "error" for _, _, status in report)
@@ -887,12 +851,10 @@ def _build_sentiment_analyzer() -> object:
 
 
 def _build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bool) -> object:
-    from speekify.tagging import TaggingConfig
-
-    return TaggingConfig(
+    return application.build_tagging_config(
         enabled=enabled,
-        use_sentiment=enabled and use_sentiment,
-        enable_sigh=enabled and enable_sigh,
+        use_sentiment=use_sentiment,
+        enable_sigh=enable_sigh,
     )
 
 
@@ -906,10 +868,11 @@ def _build_tagger(tagging_config: object) -> object:
 
 
 def _build_generation_dependencies(tagging_config: object) -> object:
-    from speekify.dependencies import GenerationDependencyFactories, build_generation_dependencies
+    from speekify.dependencies import GenerationDependencyFactories
 
-    return build_generation_dependencies(
+    return application.build_runtime_dependencies(
         tagging_config,
+        dependency_mode="fresh",
         factories=GenerationDependencyFactories(
             synthesizer_factory=_build_synthesizer,
             translator_factory=_build_translator,
@@ -917,24 +880,6 @@ def _build_generation_dependencies(tagging_config: object) -> object:
         ),
         tagger_factory=_build_tagger,
     )
-
-
-def _build_generation_request(**kwargs: Any) -> object:
-    from speekify.workflow import GenerationRequest
-
-    return GenerationRequest(**kwargs)
-
-
-def generate_audio(*args: Any, **kwargs: Any) -> Awaitable[Any]:
-    from speekify.workflow import generate_audio as run_generate_audio
-
-    return run_generate_audio(*args, **kwargs)
-
-
-def inspect_generation(*args: Any, **kwargs: Any) -> Awaitable[Any]:
-    from speekify.workflow import inspect_generation as run_inspect_generation
-
-    return run_inspect_generation(*args, **kwargs)
 
 
 def _warm_up_models(
