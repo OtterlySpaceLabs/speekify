@@ -15,10 +15,12 @@ dependencies = [
   "torch>=2.8",
   "transformers>=4.57",
   "typer>=0.12",
+  "mcp>=1.13",
 ]
 
 [project.scripts]
 speekify = "speekify.__main__:main"
+speekify-mcp = "speekify.mcp_server:main"
 
 [dependency-groups]
 dev = [

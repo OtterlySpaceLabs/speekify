@@ -15,6 +15,11 @@ speekify \- convert inline text, stdin, or readable URL content into a local WAV
 [
 .I OPTIONS
 ]
+.PP
+.B speekify-mcp
+[
+.I OPTIONS
+]
 .SH DESCRIPTION
 Speekify is a Python CLI that turns inline text, piped stdin, or the readable body of a URL into a local WAV file generated with Supertonic v3.
 .PP
@@ -26,6 +31,10 @@ to pre-download and warm the local AI models.
 Use
 .B speekify --doctor
 to verify the runtime dependencies, confirm that the AI models load correctly, and get a remediation hint when setup is required.
+.PP
+Use
+.B speekify-mcp
+to expose Speekify as a local Model Context Protocol server for AI assistants that need to generate WAV files from text, URL content, or summarized news recaps.
 .SH ARGUMENTS
 .TP
 .I SOURCE
@@ -104,6 +113,19 @@ Show technical diagnostics such as the log file path.
 .TP
 .B --help
 Show setup help and exit.
+.SH MCP SERVER
+The
+.B speekify-mcp
+entry point runs an MCP server over stdio by default. It exposes the
+.B speekify_generate_wav
+tool for converting inline text or readable URL content into a WAV file,
+.B speekify_generation_defaults
+for supported voices and language defaults, and a
+.B news_recap_to_audio
+prompt for source-summary-to-audio automations.
+.TP
+.B --transport
+Select the MCP transport, either stdio or streamable-http.
 .SH EXAMPLES
 .TP
 .B speekify "Hello world"
@@ -123,6 +145,12 @@ Check dependencies, model availability, and installation health.
 .TP
 .B speekify setup
 Download and warm the local AI models.
+.TP
+.B speekify-mcp
+Run the MCP server for local AI clients over stdio.
+.TP
+.B speekify-mcp --transport streamable-http
+Run the MCP server with streamable HTTP transport for local experiments.
 .SH FILES
 .TP
 .I logs/speekify.log
