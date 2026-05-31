@@ -85,6 +85,14 @@ speekify --output-dir ~/Speekify/audio \
   --feed-base-url https://audio.example.com/speekify \
   https://example.com/article
 
+# Preview extraction, translation, tags, and planned paths without synthesis
+speekify --dry-run https://example.com/article
+uv run speekify inspect "Hello world"
+
+# Rebuild or validate the podcast RSS feed from existing sidecars
+speekify feed rebuild --output-dir ~/Speekify/audio
+uv run speekify feed validate --output-dir ~/Speekify/audio
+
 # Choose a voice
 speekify --voice F2 "Hello world"
 uv run speekify --voice F2 "Hello world"
@@ -141,6 +149,24 @@ speekify setup --help
 uv run speekify setup --help
 ```
 
+### User config
+
+Speekify can read default generation settings from `~/.config/speekify/config.toml`. Set `SPEEKIFY_CONFIG=/path/to/config.toml` to use another file. CLI options still win over config values.
+
+```toml
+[generation]
+voice = "M5"
+language_code = "fr"
+speed = 0.98
+steps = 10
+silence_duration = 0.25
+output_dir = "~/Speekify/audio"
+feed_base_url = "https://audio.example.com/speekify"
+tags = true
+tag_sentiment = true
+tag_sigh = true
+```
+
 ### CLI options reference
 
 | Option | Default | Description |
@@ -157,6 +183,7 @@ uv run speekify setup --help
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
 | `--feed-base-url URL` | `SPEEKIFY_FEED_BASE_URL` or local file URLs | Public `http://` or `https://` directory URL used for RSS enclosure URLs, for example after syncing the output directory to static hosting. |
+| `--dry-run` | disabled | Preview extraction, translation, tags, and planned output paths without generating audio. |
 | `--tags / --no-tags` | `--tags` | Add sparse Supertonic inline speech tags, mainly `<breath>`. |
 | `--tag-sentiment / --no-tag-sentiment` | `--tag-sentiment` | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
 | `--tag-sigh / --no-tag-sigh` | `--tag-sigh` | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
@@ -168,6 +195,9 @@ Additional commands:
 | Command | Description |
 |---|---|
 | `speekify setup` | Download and warm up the local models. |
+| `speekify inspect` | Preview the generation plan without synthesis. |
+| `speekify feed rebuild` | Rebuild `speekify-feed.xml` from existing JSON sidecars. |
+| `speekify feed validate` | Check JSON sidecars and referenced WAV files. |
 | `speekify --doctor` | Verify runtime dependencies, actively load the AI models, and suggest `speekify setup` if a check fails. |
 
 The main help output also includes a maintenance section with `speekify --version`, `speekify -v`, `speekify --doctor`, and `speekify setup` so the operational commands stay discoverable from `speekify --help`.
@@ -213,7 +243,7 @@ stream episodes.
 
 Speekify also ships a local Model Context Protocol (MCP) server so AI assistants can call Speekify as a tool during automations. The server exposes:
 
-- `speekify_generate_wav`: convert inline text or readable URL content to a local WAV file and return structured metadata (`output_path`, `output_uri`, sidecar/feed paths, duration, title, warnings, and log path). Pass `feed_base_url` when the output directory is mirrored to public HTTP(S) hosting.
+- `speekify_generate_wav`: convert inline text or readable URL content to a local WAV file and return structured metadata (`output_path`, `output_uri`, sidecar/feed paths, duration, title, warnings, and log path). It accepts the same generation controls as the CLI, including `feed_base_url`, `english_islands`, `english_lexicon_path`, and `use_user_config`.
 - `speekify_generation_defaults`: inspect supported voices, languages, and generation ranges before calling the generator.
 - `news_recap_to_audio`: a prompt template for the common workflow “check news sources, summarize them, then generate WAV files for each URL and for the final recap.”
 

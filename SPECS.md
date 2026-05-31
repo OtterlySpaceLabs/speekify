@@ -6,9 +6,13 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 
 ## Architecture
 
-- `src/speekify/__main__.py`: CLI parser, setup command, stdin handling, output messages.
-- `src/speekify/workflow.py`: source resolution, optional translation, validation, synthesis orchestration, file saving.
-- `src/speekify/extract.py`: text normalization and URL-to-readable-text extraction.
+- `src/speekify/__main__.py`: CLI parser, command routing, and stdin handling.
+- `src/speekify/cli_rendering.py`: Rich status, success, warning, error, doctor, feed, and inspection output.
+- `src/speekify/setup.py`: setup command model warmup/progress implementation.
+- `src/speekify/workflow.py`: source resolution, optional translation, validation, inspection, synthesis orchestration, file saving.
+- `src/speekify/extract.py`: public extraction facade.
+- `src/speekify/extractors/`: provider-specific extraction for generic HTML, YouTube, X/Twitter, and Medium fallbacks.
+- `src/speekify/user_config.py`: optional TOML generation defaults from `~/.config/speekify/config.toml` or `SPEEKIFY_CONFIG`.
 - `src/speekify/naming.py`: deterministic, filesystem-safe output path creation.
 - `src/speekify/tts.py`: Supertonic adapter and permissive text preparation.
 - `src/speekify/tagging/`: sparse Supertonic inline tag placement with rules, CardiffNLP sentiment, and capped emotion tags.
@@ -34,6 +38,9 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 - Supertonic handles normal long-text chunking internally via `max_chunk_length` and `silence_duration`; Speekify only splits external batches above the SDK text limit.
 - URL extraction produces readable article/body text, not raw HTML.
 - A single URL source is auto-detected; `--url` can force URL extraction mode.
+- `--dry-run` and `speekify inspect` preview extraction, translation, tagging, and planned output paths without synthesis.
+- `speekify feed rebuild` rebuilds the RSS feed from JSON sidecars; `speekify feed validate` checks sidecars and referenced WAV files.
+- MCP generation exposes CLI-equivalent generation controls including English-island options and optional user-config defaults.
 - Running without a source and without piped stdin is an invalid CLI invocation.
 
 ## Commands
@@ -46,6 +53,10 @@ printf 'Hello from stdin' | speekify
 speekify --title my-article --output-dir ~/Desktop "Hello world"
 speekify --no-tag-sentiment --no-tag-sigh "Hello world"
 speekify --custom-style-path ~/voices/my-voice.json "Hello world"
+speekify --dry-run https://example.com/article
+speekify inspect "Hello world"
+speekify feed rebuild --output-dir ~/Speekify/audio
+speekify feed validate --output-dir ~/Speekify/audio
 speekify setup
 speekify setup --skip-sentiment
 ```

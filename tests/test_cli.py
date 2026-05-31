@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import StringIO
+import json
 import re
 
 from speekify.__main__ import _build_doctor_report, main
@@ -449,6 +450,149 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
 
     assert exit_code == 0
     assert str(tmp_path / "stdin.wav") in stdout
+
+
+def test_main_dry_run_renders_inspection(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    async def fake_inspect_generation(request, **_: object):
+        from speekify.tts import PreparedText
+        from speekify.workflow import GenerationInspection
+
+        assert request.source_text == "Hello preview"
+        return GenerationInspection(
+            output_path=tmp_path / "hello-preview.wav",
+            feed_path=tmp_path / "speekify-feed.xml",
+            title="Hello preview",
+            content=ExtractedContent(text="Hello preview"),
+            prepared_text=PreparedText(
+                original_text="Hello preview",
+                text="Hello preview",
+                reformatted=False,
+                removed_characters=(),
+                removed_character_count=0,
+            ),
+            source_mode="text",
+        )
+
+    monkeypatch.setattr("speekify.__main__.inspect_generation", fake_inspect_generation)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+    monkeypatch.setattr("speekify.__main__._build_tagger", lambda tagging_config: object())
+
+    exit_code = main(["--dry-run", "Hello", "preview"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Inspection ready" in stdout
+    assert "hello-preview.wav" in stdout
+
+
+def test_main_uses_user_config_defaults(tmp_path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    output_dir = tmp_path / "configured-output"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[generation]",
+                'voice = "F4"',
+                'language_code = "en"',
+                "speed = 1.3",
+                "steps = 24",
+                f'output_dir = "{output_dir}"',
+                "tags = false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SPEEKIFY_CONFIG", str(config_path))
+
+    async def fake_generate_audio(request, **_: object) -> GenerationResult:
+        assert request.voice == "F4"
+        assert request.language_code == "en"
+        assert request.speed == 1.3
+        assert request.steps == 24
+        assert request.output_dir == output_dir
+        assert request.tagging_config.enabled is False
+        return GenerationResult(
+            output_path=output_dir / "configured.wav",
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=0.5,
+                batch_count=1,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text=request.source_text,
+                    reformatted=False,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text=request.source_text),
+        )
+
+    monkeypatch.setattr("speekify.__main__.generate_audio", fake_generate_audio)
+    monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
+    monkeypatch.setattr("speekify.__main__._build_translator", object)
+
+    exit_code = main(["Hello"])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert str(output_dir / "configured.wav") in stdout
+
+
+def test_main_feed_rebuild_and_validate(tmp_path, capsys) -> None:
+    wav_path = tmp_path / "episode.wav"
+    wav_path.write_text("wav", encoding="utf-8")
+    (tmp_path / "episode.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://otterly.space/speekify/metadata/v1",
+                "title": "Episode",
+                "created_at": "2026-05-31T12:00:00Z",
+                "audio": {
+                    "file": wav_path.name,
+                    "path": str(wav_path),
+                    "uri": wav_path.resolve().as_uri(),
+                    "mime_type": "audio/wav",
+                    "size_bytes": 3,
+                    "duration_seconds": 1.0,
+                },
+                "source": {
+                    "mode": "text",
+                    "url": "",
+                    "extracted_title": "",
+                    "text_characters": 7,
+                },
+                "synthesis": {
+                    "language_code": "fr",
+                    "voice": "M5",
+                    "voice_style_path": "",
+                    "speed": 0.98,
+                    "steps": 10,
+                    "silence_duration": 0.25,
+                    "max_chunk_length": None,
+                    "batch_count": 1,
+                },
+                "podcast": {
+                    "guid": wav_path.resolve().as_uri(),
+                    "enclosure_url": wav_path.resolve().as_uri(),
+                    "local_enclosure_uri": wav_path.resolve().as_uri(),
+                    "enclosure_type": "audio/wav",
+                    "feed_file": "speekify-feed.xml",
+                    "feed_url": "",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["feed", "rebuild", "--output-dir", str(tmp_path)]) == 0
+    assert (tmp_path / "speekify-feed.xml").exists()
+    assert main(["feed", "validate", "--output-dir", str(tmp_path)]) == 0
+    stdout = capsys.readouterr().out
+    assert "Podcast feed rebuilt" in stdout
+    assert "Podcast feed valid" in stdout
 
 
 def test_main_prints_version(monkeypatch, capsys) -> None:

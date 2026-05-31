@@ -19,7 +19,7 @@ from speekify.metadata import GenerationMetadataRequest, write_generation_metada
 from speekify.naming import build_output_path
 from speekify.tagging import SupertoneTagger, TaggingConfig
 from speekify.multilingual import load_english_lexicon
-from speekify.tts import SynthesisArtifact, SupertonicSynthesizer
+from speekify.tts import PreparedText, SynthesisArtifact, SupertonicSynthesizer
 from speekify.translation import HuggingFaceTranslator
 
 StatusCallback = Callable[[str], None]
@@ -51,6 +51,19 @@ class GenerationResult:
     content: ExtractedContent
     metadata_path: Path | None = None
     feed_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class GenerationInspection:
+    output_path: Path
+    feed_path: Path
+    title: str
+    content: ExtractedContent
+    prepared_text: PreparedText
+    source_mode: str
+    tag_counts: dict[str, int] = field(default_factory=dict)
+    sentiment_used: bool = False
+    english_lexicon_terms: int = 0
 
 
 def _update_status(status_callback: StatusCallback | None, message: str) -> None:
@@ -151,33 +164,8 @@ async def generate_audio(
         len(request.source_text.strip()),
     )
 
-    if not MIN_SPEED <= request.speed <= MAX_SPEED:
-        raise ValueError(f"Speed must be between {MIN_SPEED} and {MAX_SPEED}.")
-    if not MIN_STEPS <= request.steps <= MAX_STEPS:
-        raise ValueError(f"Steps must be between {MIN_STEPS} and {MAX_STEPS}.")
-    if request.max_chunk_length is not None and request.max_chunk_length < 10:
-        raise ValueError("Maximum chunk length must be at least 10 characters.")
-    if request.silence_duration < 0:
-        raise ValueError("Silence duration cannot be negative.")
-    if request.voice_style_path is not None and not request.voice_style_path.expanduser().is_file():
-        raise ValueError(f"Custom voice style file does not exist: {request.voice_style_path}")
-    if (
-        request.english_lexicon_path is not None
-        and not request.english_lexicon_path.expanduser().is_file()
-    ):
-        raise ValueError(f"English lexicon file does not exist: {request.english_lexicon_path}")
-
-    english_lexicon_terms = None
-    if request.english_lexicon_path is not None:
-        english_lexicon_terms = await asyncio.to_thread(
-            load_english_lexicon,
-            request.english_lexicon_path,
-        )
-        logger.info(
-            "English lexicon loaded path=%s terms=%s",
-            request.english_lexicon_path,
-            len(english_lexicon_terms),
-        )
+    _validate_generation_request(request)
+    english_lexicon_terms = await _load_english_lexicon_terms(request, logger=logger)
 
     content = await resolve_content(
         request.source_text,
@@ -285,3 +273,115 @@ async def generate_audio(
         metadata_path=metadata.metadata_path,
         feed_path=metadata.feed_path,
     )
+
+
+async def inspect_generation(
+    request: GenerationRequest,
+    *,
+    translator: HuggingFaceTranslator,
+    tagger: SupertoneTagger | None = None,
+    logger: logging.Logger,
+    status_callback: StatusCallback | None = None,
+) -> GenerationInspection:
+    logger.info(
+        "Generation inspection started mode=%s voice=%s language=%s title_supplied=%s text_length=%s",
+        "url" if request.is_url_mode else "text",
+        request.voice,
+        request.language_code,
+        bool(request.title),
+        len(request.source_text.strip()),
+    )
+    _validate_generation_request(request)
+    english_lexicon_terms = await _load_english_lexicon_terms(request, logger=logger)
+
+    content = await resolve_content(
+        request.source_text,
+        is_url_mode=request.is_url_mode,
+        target_language=request.language_code,
+        translator=translator,
+        logger=logger,
+        status_callback=status_callback,
+    )
+    _update_status(status_callback, "preparing text")
+    normalized_text = normalize_text(content.text)
+    prepared_text = PreparedText(
+        original_text=content.text.strip(),
+        text=normalized_text,
+        reformatted=normalized_text != content.text.strip(),
+        removed_characters=(),
+        removed_character_count=0,
+    )
+
+    tag_counts: dict[str, int] = {}
+    sentiment_used = False
+    if request.tagging_config.enabled:
+        _update_status(status_callback, "annotating text")
+        active_tagger = tagger or SupertoneTagger(config=request.tagging_config)
+        tagging_result = await asyncio.to_thread(
+            active_tagger.tag,
+            prepared_text.text,
+            language_code=request.language_code,
+        )
+        tag_counts = dict(tagging_result.tag_counts)
+        sentiment_used = tagging_result.sentiment_used
+        if tagging_result.changed:
+            prepared_text = replace(prepared_text, text=tagging_result.text, reformatted=True)
+
+    output_title = request.title or content.best_title()
+    output_path = build_output_path(request.output_dir, output_title)
+    feed_path = request.output_dir / "speekify-feed.xml"
+    _update_status(status_callback, "building preview")
+    logger.info(
+        "Generation inspection finished title=%r path=%s normalized_text_length=%s",
+        output_title,
+        output_path,
+        len(prepared_text.text),
+    )
+    return GenerationInspection(
+        output_path=output_path,
+        feed_path=feed_path,
+        title=output_title,
+        content=content,
+        prepared_text=prepared_text,
+        source_mode="url" if request.is_url_mode or is_single_url_input(request.source_text) else "text",
+        tag_counts=tag_counts,
+        sentiment_used=sentiment_used,
+        english_lexicon_terms=len(english_lexicon_terms or ()),
+    )
+
+
+def _validate_generation_request(request: GenerationRequest) -> None:
+    if not MIN_SPEED <= request.speed <= MAX_SPEED:
+        raise ValueError(f"Speed must be between {MIN_SPEED} and {MAX_SPEED}.")
+    if not MIN_STEPS <= request.steps <= MAX_STEPS:
+        raise ValueError(f"Steps must be between {MIN_STEPS} and {MAX_STEPS}.")
+    if request.max_chunk_length is not None and request.max_chunk_length < 10:
+        raise ValueError("Maximum chunk length must be at least 10 characters.")
+    if request.silence_duration < 0:
+        raise ValueError("Silence duration cannot be negative.")
+    if request.voice_style_path is not None and not request.voice_style_path.expanduser().is_file():
+        raise ValueError(f"Custom voice style file does not exist: {request.voice_style_path}")
+    if (
+        request.english_lexicon_path is not None
+        and not request.english_lexicon_path.expanduser().is_file()
+    ):
+        raise ValueError(f"English lexicon file does not exist: {request.english_lexicon_path}")
+
+
+async def _load_english_lexicon_terms(
+    request: GenerationRequest,
+    *,
+    logger: logging.Logger,
+) -> tuple[str, ...] | None:
+    if request.english_lexicon_path is None:
+        return None
+    english_lexicon_terms = await asyncio.to_thread(
+        load_english_lexicon,
+        request.english_lexicon_path,
+    )
+    logger.info(
+        "English lexicon loaded path=%s terms=%s",
+        request.english_lexicon_path,
+        len(english_lexicon_terms),
+    )
+    return english_lexicon_terms

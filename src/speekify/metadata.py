@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import format_datetime
 from pathlib import Path
+from typing import Mapping, TypedDict
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
@@ -21,10 +22,73 @@ ITUNES_NAMESPACE = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 ET.register_namespace("itunes", ITUNES_NAMESPACE)
 
 
+class AudioMetadataPayload(TypedDict):
+    file: str
+    path: str
+    uri: str
+    mime_type: str
+    size_bytes: int
+    duration_seconds: float
+
+
+class SourceMetadataPayload(TypedDict):
+    mode: str
+    url: str
+    extracted_title: str
+    text_characters: int
+
+
+class SynthesisMetadataPayload(TypedDict):
+    language_code: str
+    voice: str
+    voice_style_path: str
+    speed: float
+    steps: int
+    silence_duration: float
+    max_chunk_length: int | None
+    batch_count: int
+
+
+class PodcastMetadataPayload(TypedDict):
+    guid: str
+    enclosure_url: str
+    local_enclosure_uri: str
+    enclosure_type: str
+    feed_file: str
+    feed_url: str
+
+
+GenerationMetadataPayload = TypedDict(
+    "GenerationMetadataPayload",
+    {
+        "$schema": str,
+        "title": str,
+        "created_at": str,
+        "audio": AudioMetadataPayload,
+        "source": SourceMetadataPayload,
+        "synthesis": SynthesisMetadataPayload,
+        "podcast": PodcastMetadataPayload,
+    },
+)
+
+
 @dataclass(frozen=True)
 class GenerationMetadata:
     metadata_path: Path
     feed_path: Path
+
+
+@dataclass(frozen=True)
+class PodcastFeedInspection:
+    output_dir: Path
+    feed_path: Path
+    entry_count: int
+    invalid_metadata_paths: tuple[Path, ...] = ()
+    missing_audio_paths: tuple[Path, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        return not self.invalid_metadata_paths and not self.missing_audio_paths
 
 
 @dataclass(frozen=True)
@@ -115,6 +179,18 @@ def rebuild_podcast_feed(
     return feed_path
 
 
+def inspect_podcast_feed(output_dir: Path) -> PodcastFeedInspection:
+    output_dir = output_dir.expanduser()
+    entries, invalid_metadata_paths, missing_audio_paths = _scan_metadata_entries(output_dir)
+    return PodcastFeedInspection(
+        output_dir=output_dir,
+        feed_path=output_dir / RSS_FEED_FILENAME,
+        entry_count=len(entries),
+        invalid_metadata_paths=tuple(invalid_metadata_paths),
+        missing_audio_paths=tuple(missing_audio_paths),
+    )
+
+
 def _build_metadata_payload(
     *,
     output_path: Path,
@@ -131,7 +207,7 @@ def _build_metadata_payload(
     artifact: SynthesisArtifact,
     feed_base_url: str,
     created_at: datetime,
-) -> dict[str, object]:
+) -> GenerationMetadataPayload:
     audio_size = output_path.stat().st_size if output_path.exists() else 0
     source_url = source_text.strip() if is_single_url_input(source_text) else ""
     display_title = title.strip() or content.best_title()
@@ -183,46 +259,57 @@ def _media_url(file_name: str, feed_base_url: str, *, fallback_uri: str) -> str:
     return f"{feed_base_url}/{quote(file_name)}"
 
 
-def _load_metadata_entries(output_dir: Path) -> list[dict[str, object]]:
-    entries: list[dict[str, object]] = []
+def _load_metadata_entries(output_dir: Path) -> list[Mapping[str, object]]:
+    entries, _, _ = _scan_metadata_entries(output_dir)
+    return sorted(entries, key=_entry_sort_key, reverse=True)
+
+
+def _scan_metadata_entries(
+    output_dir: Path,
+) -> tuple[list[Mapping[str, object]], list[Path], list[Path]]:
+    entries: list[Mapping[str, object]] = []
+    invalid_metadata_paths: list[Path] = []
+    missing_audio_paths: list[Path] = []
     for metadata_path in sorted(output_dir.glob("*.json")):
         try:
             payload = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            invalid_metadata_paths.append(metadata_path)
             continue
         if payload.get("$schema") != METADATA_SCHEMA:
             continue
         audio = payload.get("audio")
         if not isinstance(audio, dict):
+            invalid_metadata_paths.append(metadata_path)
             continue
         audio_file = audio.get("file")
-        if not isinstance(audio_file, str) or not (output_dir / audio_file).exists():
+        if not isinstance(audio_file, str):
+            invalid_metadata_paths.append(metadata_path)
+            continue
+        audio_path = output_dir / audio_file
+        if not audio_path.exists():
+            missing_audio_paths.append(audio_path)
             continue
         entries.append(payload)
-    return sorted(entries, key=_entry_sort_key, reverse=True)
+    return entries, invalid_metadata_paths, missing_audio_paths
 
 
-def _entry_sort_key(entry: dict[str, object]) -> str:
+def _entry_sort_key(entry: Mapping[str, object]) -> str:
     created_at = entry.get("created_at")
     return created_at if isinstance(created_at, str) else ""
 
 
 def _append_feed_item(
     channel: ET.Element,
-    entry: dict[str, object],
+    entry: Mapping[str, object],
     *,
     output_dir: Path,
     feed_base_url: str,
 ) -> None:
-    audio = entry.get("audio") if isinstance(entry.get("audio"), dict) else {}
-    source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
-    podcast = entry.get("podcast") if isinstance(entry.get("podcast"), dict) else {}
-    synthesis = entry.get("synthesis") if isinstance(entry.get("synthesis"), dict) else {}
-
-    assert isinstance(audio, dict)
-    assert isinstance(source, dict)
-    assert isinstance(podcast, dict)
-    assert isinstance(synthesis, dict)
+    audio = _mapping_value(entry.get("audio"))
+    source = _mapping_value(entry.get("source"))
+    podcast = _mapping_value(entry.get("podcast"))
+    synthesis = _mapping_value(entry.get("synthesis"))
 
     item = ET.SubElement(channel, "item")
     ET.SubElement(item, "title").text = _string_value(entry.get("title"), "Untitled")
@@ -254,7 +341,7 @@ def _append_feed_item(
     ET.SubElement(item, f"{{{ITUNES_NAMESPACE}}}duration").text = _format_duration(duration)
 
 
-def _description(source: dict[object, object], synthesis: dict[object, object]) -> str:
+def _description(source: Mapping[object, object], synthesis: Mapping[object, object]) -> str:
     parts = [
         f"Language: {_string_value(synthesis.get('language_code'), 'unknown')}",
         f"Voice: {_string_value(synthesis.get('voice'), 'unknown')}",
@@ -265,7 +352,7 @@ def _description(source: dict[object, object], synthesis: dict[object, object]) 
     return " | ".join(parts)
 
 
-def _feed_language(entries: list[dict[str, object]]) -> str:
+def _feed_language(entries: list[Mapping[str, object]]) -> str:
     for entry in entries:
         synthesis = entry.get("synthesis")
         if isinstance(synthesis, dict):
@@ -309,6 +396,10 @@ def _number_value(value: object, default: float) -> float:
     if isinstance(value, int | float):
         return float(value)
     return default
+
+
+def _mapping_value(value: object) -> Mapping[object, object]:
+    return value if isinstance(value, dict) else {}
 
 
 def _indent(element: ET.Element, level: int = 0) -> None:

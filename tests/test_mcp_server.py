@@ -15,6 +15,7 @@ def test_generation_defaults_are_mcp_serializable() -> None:
 
     assert defaults["language_code"] == "fr"
     assert defaults["voice"] == "M5"
+    assert defaults["english_islands"] is True
     assert "fr" in defaults["supported_languages"]
     assert "M5" in defaults["voices"]
     assert defaults["speed_range"] == {"min": 0.7, "max": 2.0}
@@ -33,6 +34,8 @@ def test_build_request_normalizes_and_validates_options(tmp_path) -> None:
         steps=12,
         max_chunk_length=240,
         silence_duration=0.1,
+        english_islands=False,
+        english_lexicon_path=str(tmp_path / "english.txt"),
         output_dir=str(tmp_path),
         feed_base_url="https://audio.example.com/speekify/",
         tags=True,
@@ -44,6 +47,8 @@ def test_build_request_normalizes_and_validates_options(tmp_path) -> None:
     assert request.title == "Recap du jour"
     assert request.voice == "M1"
     assert request.language_code == "fr"
+    assert request.english_islands is False
+    assert request.english_lexicon_path == tmp_path / "english.txt"
     assert request.output_dir == tmp_path
     assert request.feed_base_url == "https://audio.example.com/speekify"
     assert request.tagging_config.enabled is True
@@ -71,6 +76,8 @@ def test_build_request_rejects_invalid_mcp_inputs(field: str, value: str, messag
         "steps": 10,
         "max_chunk_length": None,
         "silence_duration": 0.25,
+        "english_islands": True,
+        "english_lexicon_path": None,
         "output_dir": None,
         "feed_base_url": "",
         "tags": True,
@@ -175,6 +182,64 @@ def test_generate_wav_returns_supplied_title_in_structured_payload(tmp_path, mon
     )
 
     assert result["title"] == "Custom title"
+
+
+def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> None:
+    config_path = tmp_path / "config.toml"
+    lexicon_path = tmp_path / "lexicon.txt"
+    output_dir = tmp_path / "audio"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[generation]",
+                'voice = "F1"',
+                'language_code = "en"',
+                "speed = 1.2",
+                "steps = 22",
+                "max_chunk_length = 180",
+                "silence_duration = 0.4",
+                "english_islands = false",
+                f'english_lexicon_path = "{lexicon_path}"',
+                f'output_dir = "{output_dir}"',
+                'feed_base_url = "https://audio.example.com/speekify/"',
+                "tags = false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SPEEKIFY_CONFIG", str(config_path))
+
+    request = _build_request(
+        source="Bonjour",
+        is_url_mode=False,
+        title="",
+        voice="M5",
+        custom_style_path=None,
+        language_code="fr",
+        speed=0.98,
+        steps=10,
+        max_chunk_length=None,
+        silence_duration=0.25,
+        english_islands=True,
+        english_lexicon_path=None,
+        output_dir=None,
+        feed_base_url="",
+        tags=True,
+        tag_sentiment=True,
+        tag_sigh=True,
+    )
+
+    assert request.voice == "F1"
+    assert request.language_code == "en"
+    assert request.speed == 1.2
+    assert request.steps == 22
+    assert request.max_chunk_length == 180
+    assert request.silence_duration == 0.4
+    assert request.english_islands is False
+    assert request.english_lexicon_path == lexicon_path
+    assert request.output_dir == output_dir
+    assert request.feed_base_url == "https://audio.example.com/speekify"
+    assert request.tagging_config.enabled is False
 
 
 def test_create_mcp_server_registers_fastmcp_instance() -> None:

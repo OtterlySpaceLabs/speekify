@@ -13,11 +13,17 @@ from typing import Annotated, Any
 
 import click
 import typer
-from rich import box
-from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
-from rich.table import Table
 
+from speekify.cli_rendering import (
+    format_status as _format_status,
+    render_cli_error as _render_cli_error,
+    render_doctor_report as _render_doctor_report,
+    render_feed_status as _render_feed_status,
+    render_generation_success as _render_generation_success,
+    render_inspection_success as _render_inspection_success,
+    render_runtime_error as _render_runtime_error,
+    render_setup_success as _render_setup_success,
+)
 from speekify.config import (
     DEFAULT_SILENCE_DURATION,
     DEFAULT_SPEED,
@@ -31,13 +37,13 @@ from speekify.config import (
     SUPPORTED_TTS_LANGUAGES,
     UNKNOWN_TTS_LANGUAGE,
 )
-from speekify.console import console, error_console
+from speekify.console import console
 from speekify.logging_utils import configure_logger
+from speekify.user_config import UserConfig, load_user_config
 from speekify.validation import normalize_feed_base_url, normalize_language_code, normalize_voice_name
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 PACKAGE_NAME = "speekify"
-DOCTOR_REMEDIATION = "Run `speekify setup` to download or repair the local models."
 
 
 def _build_cli_epilog() -> str:
@@ -46,6 +52,8 @@ def _build_cli_epilog() -> str:
         '  speekify "Hello world"',
         '  speekify --lang fr "Hello world"',
         "  speekify --lang ja https://example.com/article",
+        '  speekify --dry-run "Hello world"',
+        '  speekify inspect "Hello world"',
         "  printf 'Hello from stdin' | speekify",
         "",
         "Maintenance:",
@@ -54,6 +62,7 @@ def _build_cli_epilog() -> str:
         "  speekify --doctor",
         "  speekify setup",
         "  speekify setup --help",
+        "  speekify feed rebuild --output-dir ./output",
         "",
         f"Supported languages: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
         f"Use {UNKNOWN_TTS_LANGUAGE} for language-agnostic synthesis if needed.",
@@ -65,6 +74,8 @@ GENERATION_HELP = (
     "Generate a local WAV file from text, stdin, or a readable URL.\n\n" + _build_cli_epilog()
 )
 SETUP_HELP = "Download and warm up the models used by Speekify."
+INSPECT_HELP = "Preview extraction, translation, tagging, and output naming without synthesis."
+FEED_HELP = "Inspect or rebuild the local podcast RSS feed."
 
 
 def _parse_language_code(value: str) -> str:
@@ -191,6 +202,10 @@ VerboseOption = Annotated[
     bool,
     typer.Option("--verbose", help="Show technical diagnostics such as log file paths."),
 ]
+DryRunOption = Annotated[
+    bool,
+    typer.Option("--dry-run", help="Preview the generation plan without loading the speech model."),
+]
 TagsOption = Annotated[
     bool,
     typer.Option(
@@ -239,6 +254,18 @@ setup_app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+inspect_app = typer.Typer(
+    add_completion=False,
+    context_settings=CONTEXT_SETTINGS,
+    no_args_is_help=False,
+    rich_markup_mode="rich",
+)
+feed_app = typer.Typer(
+    add_completion=False,
+    context_settings=CONTEXT_SETTINGS,
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
 
 
 @generation_app.command(help=GENERATION_HELP)
@@ -260,9 +287,74 @@ def generation_command(
     tags: TagsOption = True,
     tag_sentiment: TagSentimentOption = True,
     tag_sigh: TagSighOption = True,
+    dry_run: DryRunOption = False,
     verbose: VerboseOption = False,
 ) -> int:
+    if dry_run:
+        return _run_inspection(
+            source=source,
+            is_url_mode=url,
+            title=title,
+            voice=voice,
+            custom_style_path=custom_style_path,
+            language_code=language_code,
+            speed=speed,
+            steps=steps,
+            max_chunk_length=max_chunk_length,
+            silence_duration=silence_duration,
+            english_islands=english_islands,
+            english_lexicon_path=english_lexicon_path,
+            output_dir=output_dir,
+            feed_base_url=feed_base_url,
+            tags=tags,
+            tag_sentiment=tag_sentiment,
+            tag_sigh=tag_sigh,
+            verbose=verbose,
+        )
     return _run_generation(
+        source=source,
+        is_url_mode=url,
+        title=title,
+        voice=voice,
+        custom_style_path=custom_style_path,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
+        output_dir=output_dir,
+        feed_base_url=feed_base_url,
+        tags=tags,
+        tag_sentiment=tag_sentiment,
+        tag_sigh=tag_sigh,
+        verbose=verbose,
+    )
+
+
+@inspect_app.command(help=INSPECT_HELP)
+def inspect_command(
+    source: SourceArgument = None,
+    url: UrlOption = False,
+    title: TitleOption = "",
+    voice: VoiceOption = DEFAULT_VOICE,
+    custom_style_path: CustomStylePathOption = None,
+    language_code: LanguageOption = DEFAULT_TTS_LANG,
+    speed: SpeedOption = DEFAULT_SPEED,
+    steps: StepsOption = DEFAULT_STEPS,
+    max_chunk_length: MaxChunkLengthOption = None,
+    silence_duration: SilenceDurationOption = DEFAULT_SILENCE_DURATION,
+    english_islands: EnglishIslandsOption = True,
+    english_lexicon_path: EnglishLexiconPathOption = None,
+    output_dir: OutputDirOption = None,
+    feed_base_url: FeedBaseUrlOption = "",
+    tags: TagsOption = True,
+    tag_sentiment: TagSentimentOption = True,
+    tag_sigh: TagSighOption = True,
+    verbose: VerboseOption = False,
+) -> int:
+    return _run_inspection(
         source=source,
         is_url_mode=url,
         title=title,
@@ -297,6 +389,27 @@ def setup_command(
     )
 
 
+@feed_app.command("rebuild", help="Rebuild speekify-feed.xml from JSON sidecars.")
+def feed_rebuild_command(
+    output_dir: OutputDirOption = None,
+    feed_base_url: FeedBaseUrlOption = "",
+    verbose: VerboseOption = False,
+) -> int:
+    return _run_feed_rebuild(
+        output_dir=output_dir,
+        feed_base_url=feed_base_url,
+        verbose=verbose,
+    )
+
+
+@feed_app.command("validate", help="Validate JSON sidecars and matching WAV files.")
+def feed_validate_command(
+    output_dir: OutputDirOption = None,
+    verbose: VerboseOption = False,
+) -> int:
+    return _run_feed_validate(output_dir=output_dir, verbose=verbose)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) == 1 and argv[0] in {"--version", "-v"}:
@@ -306,6 +419,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_doctor()
     if argv and argv[0] == "setup":
         return _invoke_typer(setup_app, argv[1:], prog_name="speekify setup")
+    if argv and argv[0] == "inspect":
+        return _invoke_typer(inspect_app, argv[1:], prog_name="speekify inspect")
+    if argv and argv[0] == "feed":
+        return _invoke_typer(feed_app, argv[1:], prog_name="speekify feed")
     return _invoke_typer(generation_app, argv, prog_name="speekify")
 
 
@@ -351,6 +468,37 @@ def _run_generation(
     source_text = _read_source(source)
     if source_text is None:
         raise click.UsageError("A text source, URL, or stdin is required.")
+
+    options = _apply_user_config_options(
+        voice=voice,
+        custom_style_path=custom_style_path,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
+        output_dir=output_dir,
+        feed_base_url=feed_base_url,
+        tags=tags,
+        tag_sentiment=tag_sentiment,
+        tag_sigh=tag_sigh,
+    )
+    voice = options["voice"]
+    custom_style_path = options["custom_style_path"]
+    language_code = options["language_code"]
+    speed = options["speed"]
+    steps = options["steps"]
+    max_chunk_length = options["max_chunk_length"]
+    silence_duration = options["silence_duration"]
+    english_islands = options["english_islands"]
+    english_lexicon_path = options["english_lexicon_path"]
+    output_dir = options["output_dir"]
+    feed_base_url = options["feed_base_url"]
+    tags = options["tags"]
+    tag_sentiment = options["tag_sentiment"]
+    tag_sigh = options["tag_sigh"]
 
     logger, log_path = configure_logger(verbose=verbose)
     tagging_config = _build_tagging_config(
@@ -401,6 +549,111 @@ def _run_generation(
     return 0
 
 
+def _run_inspection(
+    *,
+    source: Sequence[str] | None,
+    is_url_mode: bool,
+    title: str,
+    voice: str,
+    custom_style_path: Path | None,
+    language_code: str,
+    speed: float,
+    steps: int,
+    max_chunk_length: int | None,
+    silence_duration: float,
+    english_islands: bool,
+    english_lexicon_path: Path | None,
+    output_dir: Path | None,
+    feed_base_url: str,
+    tags: bool,
+    tag_sentiment: bool,
+    tag_sigh: bool,
+    verbose: bool,
+) -> int:
+    source_text = _read_source(source)
+    if source_text is None:
+        raise click.UsageError("A text source, URL, or stdin is required.")
+
+    options = _apply_user_config_options(
+        voice=voice,
+        custom_style_path=custom_style_path,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
+        output_dir=output_dir,
+        feed_base_url=feed_base_url,
+        tags=tags,
+        tag_sentiment=tag_sentiment,
+        tag_sigh=tag_sigh,
+    )
+    voice = options["voice"]
+    custom_style_path = options["custom_style_path"]
+    language_code = options["language_code"]
+    speed = options["speed"]
+    steps = options["steps"]
+    max_chunk_length = options["max_chunk_length"]
+    silence_duration = options["silence_duration"]
+    english_islands = options["english_islands"]
+    english_lexicon_path = options["english_lexicon_path"]
+    output_dir = options["output_dir"]
+    feed_base_url = options["feed_base_url"]
+    tags = options["tags"]
+    tag_sentiment = options["tag_sentiment"]
+    tag_sigh = options["tag_sigh"]
+
+    logger, log_path = configure_logger(verbose=verbose)
+    tagging_config = _build_tagging_config(
+        enabled=tags,
+        use_sentiment=tag_sentiment,
+        enable_sigh=tag_sigh,
+    )
+    translator = _build_translator()
+    tagger = _build_tagger(tagging_config)
+
+    try:
+        with console.status(_format_status("starting"), spinner="dots") as status:
+
+            def update_status(message: str) -> None:
+                status.update(_format_status(message))
+
+            inspection = asyncio.run(
+                inspect_generation(
+                    _build_generation_request(
+                        source_text=source_text,
+                        voice=voice,
+                        voice_style_path=custom_style_path,
+                        language_code=language_code,
+                        speed=speed,
+                        steps=steps,
+                        max_chunk_length=max_chunk_length,
+                        silence_duration=silence_duration,
+                        english_islands=english_islands,
+                        english_lexicon_path=english_lexicon_path,
+                        title=title.strip(),
+                        is_url_mode=is_url_mode,
+                        output_dir=output_dir or Path.cwd(),
+                        feed_base_url=feed_base_url,
+                        tagging_config=tagging_config,
+                    ),
+                    translator=translator,
+                    tagger=tagger,
+                    logger=logger,
+                    status_callback=update_status,
+                )
+            )
+    except Exception as exc:
+        logger.exception("CLI inspection failed")
+        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
+        return 1
+
+    _render_inspection_success(inspection, log_path=log_path if verbose else None)
+    return 0
+
+
 def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -> int:
     logger, log_path = configure_logger(verbose=verbose)
     synthesizer = _build_synthesizer()
@@ -429,6 +682,92 @@ def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -
         log_path=log_path if verbose else None,
     )
     return 0
+
+
+def _run_feed_rebuild(*, output_dir: Path | None, feed_base_url: str, verbose: bool) -> int:
+    options = _apply_user_config_options(output_dir=output_dir, feed_base_url=feed_base_url)
+    output_dir = options["output_dir"] or Path.cwd()
+    feed_base_url = options["feed_base_url"]
+    logger, log_path = configure_logger(verbose=verbose)
+    try:
+        from speekify.metadata import inspect_podcast_feed, rebuild_podcast_feed
+
+        feed_path = rebuild_podcast_feed(output_dir, feed_base_url=feed_base_url)
+        inspection = inspect_podcast_feed(output_dir)
+    except Exception as exc:
+        logger.exception("Feed rebuild failed")
+        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
+        return 1
+
+    _render_feed_status(
+        inspection,
+        title="Podcast feed rebuilt",
+        feed_path=feed_path,
+        log_path=log_path if verbose else None,
+    )
+    return 0 if inspection.ok else 1
+
+
+def _run_feed_validate(*, output_dir: Path | None, verbose: bool) -> int:
+    options = _apply_user_config_options(output_dir=output_dir)
+    output_dir = options["output_dir"] or Path.cwd()
+    logger, log_path = configure_logger(verbose=verbose)
+    try:
+        from speekify.metadata import inspect_podcast_feed
+
+        inspection = inspect_podcast_feed(output_dir)
+    except Exception as exc:
+        logger.exception("Feed validation failed")
+        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
+        return 1
+
+    _render_feed_status(
+        inspection,
+        title="Podcast feed valid" if inspection.ok else "Podcast feed needs attention",
+        feed_path=inspection.feed_path,
+        log_path=log_path if verbose else None,
+    )
+    return 0 if inspection.ok else 1
+
+
+def _load_user_config() -> UserConfig:
+    return load_user_config()
+
+
+def _apply_user_config_options(**options: Any) -> dict[str, Any]:
+    user_config = _load_user_config()
+    configured_options = {
+        "voice": user_config.voice,
+        "custom_style_path": user_config.custom_style_path,
+        "language_code": user_config.language_code,
+        "speed": user_config.speed,
+        "steps": user_config.steps,
+        "max_chunk_length": user_config.max_chunk_length,
+        "silence_duration": user_config.silence_duration,
+        "english_islands": user_config.english_islands,
+        "english_lexicon_path": user_config.english_lexicon_path,
+        "output_dir": user_config.output_dir,
+        "feed_base_url": user_config.feed_base_url,
+        "tags": user_config.tags,
+        "tag_sentiment": user_config.tag_sentiment,
+        "tag_sigh": user_config.tag_sigh,
+    }
+    return {
+        name: _option_with_config(name, value, configured_options.get(name))
+        for name, value in options.items()
+    }
+
+
+def _option_with_config(option_name: str, current_value: Any, configured_value: Any) -> Any:
+    if configured_value is None:
+        return current_value
+    context = click.get_current_context(silent=True)
+    if context is None:
+        return configured_value if current_value is None else current_value
+    source = context.get_parameter_source(option_name)
+    if source == click.core.ParameterSource.DEFAULT:
+        return configured_value
+    return current_value
 
 
 def _run_doctor() -> int:
@@ -592,6 +931,12 @@ def generate_audio(*args: Any, **kwargs: Any) -> Awaitable[Any]:
     return run_generate_audio(*args, **kwargs)
 
 
+def inspect_generation(*args: Any, **kwargs: Any) -> Awaitable[Any]:
+    from speekify.workflow import inspect_generation as run_inspect_generation
+
+    return run_inspect_generation(*args, **kwargs)
+
+
 def _warm_up_models(
     *,
     synthesizer: object,
@@ -601,37 +946,15 @@ def _warm_up_models(
     include_sentiment: bool,
     logger: logging.Logger,
 ) -> None:
-    logger.info(
-        "Warmup started include_translation=%s include_sentiment=%s",
-        include_translation,
-        include_sentiment,
-    )
-    warmups: list[tuple[str, Callable[[], object]]] = [
-        ("Supertonic model", lambda: getattr(synthesizer, "engine")),
-    ]
-    if include_translation:
-        warmups.append(("Translation model", lambda: getattr(translator, "backend")))
-    if include_sentiment:
-        warmups.append(("Emotion model", lambda: getattr(sentiment_analyzer, "backend")))
+    from speekify.setup import warm_up_models
 
-    with Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True,
-    ) as progress:
-        task_id = progress.add_task("Preparing models", total=len(warmups))
-        for label, load_model in warmups:
-            progress.update(task_id, description=label)
-            load_model()
-            progress.advance(task_id)
-
-    logger.info(
-        "Warmup finished include_translation=%s include_sentiment=%s",
-        include_translation,
-        include_sentiment,
+    warm_up_models(
+        synthesizer=synthesizer,
+        translator=translator,
+        sentiment_analyzer=sentiment_analyzer,
+        include_translation=include_translation,
+        include_sentiment=include_sentiment,
+        logger=logger,
     )
 
 
@@ -653,181 +976,6 @@ def _read_source(source_parts: Sequence[str] | None) -> str | None:
         return piped_source or None
 
     return None
-
-
-def _format_status(message: str) -> str:
-    labels = {
-        "starting": "Preparing Speekify",
-        "extracting URL": "Extracting readable page text",
-        "checking language": "Checking input language",
-        "translating to French": "Translating to French",
-        "preparing text": "Preparing text",
-        "annotating text": "Adding speech cues",
-        "loading model": "Loading speech model",
-        "synthesizing": "Generating speech",
-        "saving": "Saving WAV file",
-        "writing metadata": "Writing metadata and podcast feed",
-    }
-    return f"[cyan]{labels.get(message, message.capitalize())}...[/cyan]"
-
-
-def _format_error_message(error: Exception, *, log_path: Path | None = None) -> str:
-    message = str(error).strip() or error.__class__.__name__
-    if "unsupported by Supertonic" in message:
-        message = f"{message}. Remove or replace these characters, then run Speekify again."
-    elif "Text cannot be empty" in message:
-        message = "The input text is empty. Provide text, a URL, or piped stdin."
-
-    if log_path is not None:
-        message = f"{message}\nLog file: {log_path}"
-    return message
-
-
-def _render_cli_error(error: click.exceptions.ClickException) -> None:
-    error_console.print(
-        Panel(
-            error.format_message(),
-            title="Error",
-            title_align="left",
-            border_style="red",
-            box=box.ROUNDED,
-        )
-    )
-
-
-def _render_runtime_error(error: Exception, *, log_path: Path, verbose: bool) -> None:
-    error_console.print(
-        Panel(
-            _format_error_message(error, log_path=log_path if verbose else None),
-            title="Error",
-            title_align="left",
-            border_style="red",
-            box=box.ROUNDED,
-        )
-    )
-
-
-def _render_generation_success(generation: Any, *, log_path: Path | None) -> None:
-    table = Table(show_header=False, box=box.SIMPLE, expand=False)
-    table.add_column("Field", style="bold")
-    table.add_column("Value")
-    table.add_row("File", str(generation.output_path))
-    if getattr(generation, "metadata_path", None) is not None:
-        table.add_row("Metadata", str(generation.metadata_path))
-    if getattr(generation, "feed_path", None) is not None:
-        table.add_row("Podcast feed", str(generation.feed_path))
-    table.add_row("Duration", f"{generation.artifact.duration_seconds:.2f}s")
-    table.add_row("Batches", str(generation.artifact.batch_count))
-    if log_path is not None:
-        table.add_row("Log", str(log_path))
-
-    console.print(
-        Panel(
-            table,
-            title="Audio ready",
-            title_align="left",
-            border_style="green",
-            box=box.ROUNDED,
-        )
-    )
-    console.print(
-        f"Saved: {generation.output_path}",
-        style="green",
-        no_wrap=True,
-        overflow="ignore",
-        crop=False,
-    )
-    if getattr(generation, "metadata_path", None) is not None:
-        console.print(f"Metadata: {generation.metadata_path}", style="green")
-    if getattr(generation, "feed_path", None) is not None:
-        console.print(f"Podcast feed: {generation.feed_path}", style="green")
-    console.print(f"Duration: {generation.artifact.duration_seconds:.2f}s", style="green")
-    _render_warnings(generation.artifact.summary_notes())
-
-
-def _render_setup_success(
-    *,
-    include_translation: bool,
-    include_sentiment: bool,
-    log_path: Path | None,
-) -> None:
-    table = Table(show_header=False, box=box.SIMPLE, expand=False)
-    table.add_column("Model", style="bold")
-    table.add_column("Status")
-    table.add_row("Supertonic model", "ready")
-    table.add_row("Translation model", "ready" if include_translation else "skipped")
-    table.add_row("Emotion model", "ready" if include_sentiment else "skipped")
-    if log_path is not None:
-        table.add_row("Log", str(log_path))
-
-    console.print(
-        Panel(
-            table,
-            title="Setup complete",
-            title_align="left",
-            border_style="green",
-            box=box.ROUNDED,
-        )
-    )
-    console.print("Supertonic model ready.", style="green")
-    if include_translation:
-        console.print("Translation model ready.", style="green")
-    else:
-        console.print("Translation model skipped.", style="yellow")
-    if include_sentiment:
-        console.print("Emotion model ready.", style="green")
-    else:
-        console.print("Emotion model skipped.", style="yellow")
-
-
-def _render_doctor_report(report: Sequence[tuple[str, str, str]]) -> None:
-    table = Table(show_header=False, box=box.SIMPLE, expand=False)
-    table.add_column("Check", style="bold")
-    table.add_column("Status")
-    table.add_column("Value")
-
-    has_errors = False
-    for label, value, status in report:
-        if status == "error":
-            has_errors = True
-        style = "green" if status == "ok" else "red"
-        table.add_row(label, f"[{style}]{status}[/{style}]", value)
-
-    console.print(
-        Panel(
-            table,
-            title="Doctor",
-            title_align="left",
-            border_style="green" if not has_errors else "yellow",
-            box=box.ROUNDED,
-        )
-    )
-    if has_errors:
-        error_console.print("Doctor found one or more problems.", style="yellow")
-        error_console.print(DOCTOR_REMEDIATION, style="yellow")
-    else:
-        console.print("Doctor checks passed.", style="green")
-
-
-def _render_warnings(notes: Sequence[str]) -> None:
-    if not notes:
-        return
-
-    warning_table = Table(show_header=False, box=box.SIMPLE, expand=False)
-    warning_table.add_column("Kind", style="yellow")
-    warning_table.add_column("Message")
-    for note in notes:
-        warning_table.add_row("Warning", note)
-
-    console.print(
-        Panel(
-            warning_table,
-            title="Attention",
-            title_align="left",
-            border_style="yellow",
-            box=box.ROUNDED,
-        )
-    )
 
 
 if __name__ == "__main__":

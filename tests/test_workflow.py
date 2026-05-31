@@ -8,7 +8,7 @@ from speekify.extract import ExtractedContent
 from speekify.tagging import TaggingResult
 from speekify.translation import TranslationResult
 from speekify.tts import PreparedText, SynthesisArtifact
-from speekify.workflow import GenerationRequest, generate_audio, resolve_content
+from speekify.workflow import GenerationRequest, generate_audio, inspect_generation, resolve_content
 
 
 class NoopTranslator:
@@ -346,3 +346,31 @@ def test_generate_audio_loads_custom_english_lexicon(tmp_path) -> None:
     )
 
     assert synthesizer.synthesis_calls[0]["english_lexicon_terms"] == ("retrieval",)
+
+
+def test_inspect_generation_previews_without_synthesizer(tmp_path) -> None:
+    tagger = InlineBreathTagger()
+
+    inspection = asyncio.run(
+        inspect_generation(
+            GenerationRequest(
+                source_text="Bonjour monde",
+                voice="M1",
+                language_code="fr",
+                speed=1.05,
+                steps=8,
+                title="Preview",
+                output_dir=tmp_path,
+            ),
+            translator=NoopTranslator(),
+            tagger=tagger,
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert inspection.title == "Preview"
+    assert inspection.source_mode == "text"
+    assert inspection.output_path.parent == tmp_path
+    assert inspection.feed_path == tmp_path / "speekify-feed.xml"
+    assert inspection.prepared_text.text == "Bonjour monde <breath>"
+    assert tagger.calls == [("Bonjour monde", "fr")]
