@@ -16,6 +16,7 @@ dependencies = [
   "transformers>=4.57",
   "typer>=0.12",
   "mcp>=1.13",
+  "yt-dlp>=2024.12.13",
 ]
 
 [project.scripts]

@@ -78,6 +78,8 @@ class PermissiveSuccessSynthesizer:
         speed: float,
         silence_duration: float,
         max_chunk_length: int | None,
+        detect_english_islands: bool,
+        english_lexicon_terms: tuple[str, ...] | None,
     ) -> SynthesisArtifact:
         self.synthesis_calls.append(
             {
@@ -89,6 +91,8 @@ class PermissiveSuccessSynthesizer:
                 "speed": speed,
                 "silence_duration": silence_duration,
                 "max_chunk_length": max_chunk_length,
+                "detect_english_islands": detect_english_islands,
+                "english_lexicon_terms": english_lexicon_terms,
             }
         )
         assert voice == "M1"
@@ -184,6 +188,7 @@ def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
         "loading model",
         "synthesizing",
         "saving",
+        "writing metadata",
     ]
 
 
@@ -247,5 +252,97 @@ def test_generate_audio_passes_supertonic_options(tmp_path) -> None:
             "speed": 1.05,
             "silence_duration": 0.2,
             "max_chunk_length": 240,
+            "detect_english_islands": True,
+            "english_lexicon_terms": None,
         }
     ]
+
+
+def test_generate_audio_writes_json_metadata_and_podcast_feed(tmp_path, monkeypatch) -> None:
+    async def fake_extract_url(url: str) -> ExtractedContent:
+        assert url == "https://example.com/article"
+        return ExtractedContent(text="Bonjour source.", title="Article source")
+
+    monkeypatch.setattr("speekify.workflow.extract_url", fake_extract_url)
+
+    result = asyncio.run(
+        generate_audio(
+            GenerationRequest(
+                source_text="https://example.com/article",
+                voice="M1",
+                language_code="fr",
+                speed=1.05,
+                steps=8,
+                title="Mon article",
+                output_dir=tmp_path,
+                feed_base_url="https://audio.example.com/speekify/",
+            ),
+            synthesizer=PermissiveSuccessSynthesizer(),
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    import json
+    from xml.etree import ElementTree as ET
+
+    assert result.metadata_path == result.output_path.with_suffix(".json")
+    assert result.feed_path == tmp_path / "speekify-feed.xml"
+    assert result.metadata_path is not None
+    assert result.feed_path is not None
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    assert metadata["$schema"] == "https://otterly.space/speekify/metadata/v1"
+    assert metadata["title"] == "Mon article"
+    assert metadata["audio"]["file"] == result.output_path.name
+    assert metadata["audio"]["mime_type"] == "audio/wav"
+    assert metadata["audio"]["size_bytes"] == 3
+    assert metadata["source"]["mode"] == "url"
+    assert metadata["source"]["url"] == "https://example.com/article"
+    assert metadata["synthesis"]["voice"] == "M1"
+    assert metadata["synthesis"]["language_code"] == "fr"
+    assert metadata["podcast"]["enclosure_url"] == (
+        f"https://audio.example.com/speekify/{result.output_path.name}"
+    )
+    assert metadata["podcast"]["local_enclosure_uri"].startswith("file://")
+    assert metadata["podcast"]["enclosure_type"] == "audio/wav"
+    assert metadata["podcast"]["feed_url"] == "https://audio.example.com/speekify/speekify-feed.xml"
+
+    root = ET.parse(result.feed_path).getroot()
+    channel = root.find("channel")
+    assert channel is not None
+    assert channel.findtext("title") == "Speekify Personal Podcast"
+    item = channel.find("item")
+    assert item is not None
+    assert item.findtext("title") == "Mon article"
+    enclosure = item.find("enclosure")
+    assert enclosure is not None
+    assert enclosure.attrib["url"] == metadata["podcast"]["enclosure_url"]
+    assert channel.findtext("link") == "https://audio.example.com/speekify"
+    assert enclosure.attrib["length"] == "3"
+    assert enclosure.attrib["type"] == "audio/wav"
+
+
+def test_generate_audio_loads_custom_english_lexicon(tmp_path) -> None:
+    lexicon_path = tmp_path / "english.txt"
+    lexicon_path.write_text("# comment\nretrieval\n\n", encoding="utf-8")
+    synthesizer = PermissiveSuccessSynthesizer()
+
+    asyncio.run(
+        generate_audio(
+            GenerationRequest(
+                source_text="Bonjour 😀 monde",
+                voice="M1",
+                language_code="fr",
+                speed=1.05,
+                steps=8,
+                english_lexicon_path=lexicon_path,
+                output_dir=tmp_path,
+            ),
+            synthesizer=synthesizer,
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert synthesizer.synthesis_calls[0]["english_lexicon_terms"] == ("retrieval",)

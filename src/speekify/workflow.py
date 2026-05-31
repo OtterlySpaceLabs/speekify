@@ -15,8 +15,10 @@ from speekify.config import (
     MIN_STEPS,
 )
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
+from speekify.metadata import write_generation_metadata
 from speekify.naming import build_output_path
 from speekify.tagging import SupertoneTagger, TaggingConfig
+from speekify.multilingual import load_english_lexicon
 from speekify.tts import SynthesisArtifact, SupertonicSynthesizer
 from speekify.translation import HuggingFaceTranslator
 
@@ -33,10 +35,13 @@ class GenerationRequest:
     voice_style_path: Path | None = None
     max_chunk_length: int | None = None
     silence_duration: float = DEFAULT_SILENCE_DURATION
+    english_islands: bool = True
+    english_lexicon_path: Path | None = None
     tagging_config: TaggingConfig = field(default_factory=TaggingConfig)
     title: str = ""
     is_url_mode: bool = False
     output_dir: Path = Path.cwd()
+    feed_base_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,8 @@ class GenerationResult:
     output_path: Path
     artifact: SynthesisArtifact
     content: ExtractedContent
+    metadata_path: Path | None = None
+    feed_path: Path | None = None
 
 
 def _update_status(status_callback: StatusCallback | None, message: str) -> None:
@@ -147,15 +154,30 @@ async def generate_audio(
     if not MIN_SPEED <= request.speed <= MAX_SPEED:
         raise ValueError(f"Speed must be between {MIN_SPEED} and {MAX_SPEED}.")
     if not MIN_STEPS <= request.steps <= MAX_STEPS:
-        raise ValueError(
-            f"Steps must be between {MIN_STEPS} and {MAX_STEPS}."
-        )
+        raise ValueError(f"Steps must be between {MIN_STEPS} and {MAX_STEPS}.")
     if request.max_chunk_length is not None and request.max_chunk_length < 10:
         raise ValueError("Maximum chunk length must be at least 10 characters.")
     if request.silence_duration < 0:
         raise ValueError("Silence duration cannot be negative.")
     if request.voice_style_path is not None and not request.voice_style_path.expanduser().is_file():
         raise ValueError(f"Custom voice style file does not exist: {request.voice_style_path}")
+    if (
+        request.english_lexicon_path is not None
+        and not request.english_lexicon_path.expanduser().is_file()
+    ):
+        raise ValueError(f"English lexicon file does not exist: {request.english_lexicon_path}")
+
+    english_lexicon_terms = None
+    if request.english_lexicon_path is not None:
+        english_lexicon_terms = await asyncio.to_thread(
+            load_english_lexicon,
+            request.english_lexicon_path,
+        )
+        logger.info(
+            "English lexicon loaded path=%s terms=%s",
+            request.english_lexicon_path,
+            len(english_lexicon_terms),
+        )
 
     content = await resolve_content(
         request.source_text,
@@ -221,15 +243,43 @@ async def generate_audio(
         speed=request.speed,
         silence_duration=request.silence_duration,
         max_chunk_length=request.max_chunk_length,
+        detect_english_islands=request.english_islands,
+        english_lexicon_terms=english_lexicon_terms,
     )
     logger.info(
-        "Synthesis finished duration=%.2fs batch_count=%s",
+        "Synthesis finished duration=%.2fs batch_count=%s language_segments=%s",
         artifact.duration_seconds,
         artifact.batch_count,
+        [(segment.lang, segment.text) for segment in artifact.language_segments],
     )
 
     _update_status(status_callback, "saving")
     await asyncio.to_thread(synthesizer.save_audio, artifact.wav, output_path)
     logger.info("Audio saved path=%s", output_path)
 
-    return GenerationResult(output_path=output_path, artifact=artifact, content=content)
+    _update_status(status_callback, "writing metadata")
+    metadata = await asyncio.to_thread(
+        write_generation_metadata,
+        output_path=output_path,
+        title=output_title,
+        content=content,
+        source_text=request.source_text,
+        voice=request.voice,
+        voice_style_path=request.voice_style_path,
+        language_code=request.language_code,
+        speed=request.speed,
+        steps=request.steps,
+        max_chunk_length=request.max_chunk_length,
+        silence_duration=request.silence_duration,
+        artifact=artifact,
+        feed_base_url=request.feed_base_url,
+    )
+    logger.info("Metadata saved path=%s feed_path=%s", metadata.metadata_path, metadata.feed_path)
+
+    return GenerationResult(
+        output_path=output_path,
+        artifact=artifact,
+        content=content,
+        metadata_path=metadata.metadata_path,
+        feed_path=metadata.feed_path,
+    )

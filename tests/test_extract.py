@@ -3,7 +3,15 @@ import logging
 import pytest
 import httpx
 
-from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text, validate_url
+from speekify.extract import (
+    ExtractedContent,
+    _extract_text_from_timed_subtitle_text,
+    _extract_text_from_youtube_json3,
+    extract_url,
+    is_single_url_input,
+    normalize_text,
+    validate_url,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +58,123 @@ def test_is_single_url_input_rejects_mixed_text_and_url() -> None:
 def test_extracted_content_title_fallback() -> None:
     content = ExtractedContent(text="Bonjour le monde. Ceci est un texte long.", title="")
     assert content.best_title() == "Bonjour le monde"
+
+
+@pytest.mark.asyncio
+async def test_extract_url_uses_youtube_english_transcript(monkeypatch) -> None:
+    video_url = "https://www.youtube.com/watch?v=eSP7PLTXNy8"
+    transcript_url = "https://example.com/transcript.json3"
+
+    def fake_extract_youtube_info(url: str) -> dict[str, object]:
+        assert url == video_url
+        return {
+            "title": "Build a proactive agent workflow with Claude Code",
+            "subtitles": {
+                "en": [
+                    {"ext": "vtt", "url": "https://example.com/transcript.vtt"},
+                    {"ext": "json3", "url": transcript_url},
+                ]
+            },
+        }
+
+    class FakeAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+            request = httpx.Request("GET", url, headers=headers)
+            assert url == transcript_url
+            return httpx.Response(
+                200,
+                request=request,
+                json={
+                    "events": [
+                        {"segs": [{"utf8": "First transcript sentence."}]},
+                        {"segs": [{"utf8": "Second transcript sentence with enough text."}]},
+                    ]
+                },
+            )
+
+    monkeypatch.setattr("speekify.extract._extract_youtube_info", fake_extract_youtube_info)
+    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+
+    content = await extract_url(video_url, min_chars=40)
+
+    assert content.title == "Build a proactive agent workflow with Claude Code"
+    assert content.text == "First transcript sentence. Second transcript sentence with enough text."
+
+
+@pytest.mark.asyncio
+async def test_extract_url_uses_x_oembed_for_status(monkeypatch) -> None:
+    status_url = "https://x.com/w1nklerr/status/2060057563991884060"
+
+    class FakeAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+            request = httpx.Request("GET", url, headers=headers)
+            assert url.startswith("https://publish.x.com/oembed?")
+            return httpx.Response(
+                200,
+                request=request,
+                json={
+                    "author_name": "winkle.",
+                    "html": (
+                        "<blockquote><p>An English article summary with enough readable text "
+                        "to satisfy extraction.</p>&mdash; winkle. (@w1nklerr) "
+                        '<a href="https://twitter.com/w1nklerr/status/2060057563991884060">'
+                        "May 28, 2026</a></blockquote>"
+                    ),
+                },
+            )
+
+    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+
+    content = await extract_url(status_url, min_chars=40)
+
+    assert content.title == "X post by winkle."
+    assert (
+        content.text
+        == "An English article summary with enough readable text to satisfy extraction."
+    )
+
+
+def test_extract_text_from_youtube_json3_joins_segments() -> None:
+    assert (
+        _extract_text_from_youtube_json3(
+            '{"events": [{"segs": [{"utf8": "Hello "}, {"utf8": "world."}]}]}'
+        )
+        == "Hello world."
+    )
+
+
+def test_extract_text_from_timed_subtitle_text_strips_cues() -> None:
+    subtitle_text = """WEBVTT
+
+00:00:00.000 --> 00:00:01.000
+<v Speaker>Hello &amp; welcome.</v>
+
+00:00:01.000 --> 00:00:02.000
+Hello &amp; welcome.
+
+00:00:02.000 --> 00:00:03.000
+Next line.
+"""
+
+    assert _extract_text_from_timed_subtitle_text(subtitle_text) == "Hello & welcome. Next line."
 
 
 @pytest.mark.asyncio
