@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "speekify": {
+      "command": "uv",
+      "args": ["run", "speekify-mcp"]
+    }
+  }
+}
