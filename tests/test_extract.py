@@ -101,8 +101,8 @@ async def test_extract_url_uses_youtube_english_transcript(monkeypatch) -> None:
                 },
             )
 
-    monkeypatch.setattr("speekify.extract._extract_youtube_info", fake_extract_youtube_info)
-    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("speekify.extractors.youtube._extract_youtube_info", fake_extract_youtube_info)
+    monkeypatch.setattr("speekify.extractors.youtube.httpx.AsyncClient", FakeAsyncClient)
 
     content = await extract_url(video_url, min_chars=40)
 
