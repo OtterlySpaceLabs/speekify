@@ -77,7 +77,7 @@ async def generate_wav(
     )
     logger, log_path = configure_logger(verbose=verbose)
     generation = await _generate_with_dependencies(request, logger=logger)
-    return _serialize_generation(generation, log_path=log_path)
+    return _serialize_generation(request, generation, log_path=log_path)
 
 
 def _build_request(
@@ -170,14 +170,19 @@ async def _generate_with_dependencies(
         )
 
 
-def _serialize_generation(generation: GenerationResult, *, log_path: Path) -> dict[str, object]:
+def _serialize_generation(
+    request: GenerationRequest,
+    generation: GenerationResult,
+    *,
+    log_path: Path,
+) -> dict[str, object]:
     output_path = generation.output_path.resolve()
     return {
         "output_path": str(output_path),
         "output_uri": output_path.as_uri(),
         "duration_seconds": generation.artifact.duration_seconds,
         "batch_count": generation.artifact.batch_count,
-        "title": generation.content.best_title(),
+        "title": request.title or generation.content.best_title(),
         "text_length": len(generation.content.text),
         "warnings": generation.artifact.summary_notes(),
         "log_path": str(log_path.resolve()),

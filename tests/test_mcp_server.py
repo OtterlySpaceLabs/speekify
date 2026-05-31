@@ -123,6 +123,42 @@ def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> N
     assert str(result["log_path"]).endswith("logs/speekify.log")
 
 
+def test_generate_wav_returns_supplied_title_in_structured_payload(tmp_path, monkeypatch) -> None:
+    async def fake_generate_with_dependencies(request, *, logger):
+        output_path = request.output_dir / "custom-title.wav"
+        output_path.write_text("wav", encoding="utf-8")
+        return GenerationResult(
+            output_path=output_path,
+            artifact=SynthesisArtifact(
+                wav="wav",
+                duration_seconds=3.25,
+                batch_count=2,
+                prepared_text=PreparedText(
+                    original_text=request.source_text,
+                    text="Bonjour.",
+                    reformatted=False,
+                    removed_characters=(),
+                    removed_character_count=0,
+                ),
+            ),
+            content=ExtractedContent(text="Bonjour.", title="Extracted title"),
+        )
+
+    monkeypatch.setattr("speekify.mcp_server._generate_with_dependencies", fake_generate_with_dependencies)
+
+    result = asyncio.run(
+        generate_wav(
+            "Bonjour.",
+            title="Custom title",
+            voice="m5",
+            language_code="FR",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    assert result["title"] == "Custom title"
+
+
 def test_create_mcp_server_registers_fastmcp_instance() -> None:
     server = create_mcp_server()
 
