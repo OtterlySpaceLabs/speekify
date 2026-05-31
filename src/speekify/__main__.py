@@ -165,6 +165,20 @@ SilenceDurationOption = Annotated[
         help="Silence between Supertonic chunks in seconds.",
     ),
 ]
+EnglishIslandsOption = Annotated[
+    bool,
+    typer.Option(
+        "--english-islands/--no-english-islands",
+        help="Pronounce known English tech terms as English islands when --lang fr.",
+    ),
+]
+EnglishLexiconPathOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--english-lexicon-path",
+        help="Optional newline-delimited lexicon of English terms for French synthesis.",
+    ),
+]
 OutputDirOption = Annotated[
     Path | None,
     typer.Option("--output-dir", help="Directory where the WAV file is written."),
@@ -247,6 +261,8 @@ def generation_command(
     steps: StepsOption = DEFAULT_STEPS,
     max_chunk_length: MaxChunkLengthOption = None,
     silence_duration: SilenceDurationOption = DEFAULT_SILENCE_DURATION,
+    english_islands: EnglishIslandsOption = True,
+    english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
     feed_base_url: FeedBaseUrlOption = "",
     tags: TagsOption = True,
@@ -265,6 +281,8 @@ def generation_command(
         steps=steps,
         max_chunk_length=max_chunk_length,
         silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
         feed_base_url=feed_base_url,
         tags=tags,
@@ -329,6 +347,8 @@ def _run_generation(
     steps: int,
     max_chunk_length: int | None,
     silence_duration: float,
+    english_islands: bool,
+    english_lexicon_path: Path | None,
     output_dir: Path | None,
     feed_base_url: str,
     tags: bool,
@@ -367,6 +387,8 @@ def _run_generation(
                         steps=steps,
                         max_chunk_length=max_chunk_length,
                         silence_duration=silence_duration,
+                        english_islands=english_islands,
+                        english_lexicon_path=english_lexicon_path,
                         title=title.strip(),
                         is_url_mode=is_url_mode,
                         output_dir=output_dir or Path.cwd(),

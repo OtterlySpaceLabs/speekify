@@ -1,6 +1,6 @@
 # Speekify
 
-Speekify turns CLI text, stdin, or the readable content of a URL into a local WAV file generated with Supertonic v3.
+Speekify turns CLI text, stdin, YouTube video transcripts, X/Twitter posts, or the readable content of a URL into a local WAV file generated with Supertonic v3.
 
 ## Install
 
@@ -38,11 +38,13 @@ If you skip setup, the models can still download automatically on first use.
 
 ## Run
 
-Speekify is a CLI. Provide inline text, a URL, or piped stdin:
+Speekify is a CLI. Provide inline text, a URL, or piped stdin. URL mode supports readable articles, YouTube video transcripts (English captions/transcripts when available), and X/Twitter post text:
 
 ```bash
 speekify "Hello world"
 speekify https://example.com/article
+speekify --lang fr https://www.youtube.com/watch?v=eSP7PLTXNy8
+speekify --lang fr https://x.com/w1nklerr/status/2060057563991884060
 printf 'Hello from stdin' | speekify
 ```
 
@@ -63,6 +65,9 @@ uv run speekify --lang fr "Hello world"
 # Generate from a URL (auto-detected or forced)
 speekify https://example.com/article
 uv run speekify https://example.com/article
+
+speekify --lang fr https://www.youtube.com/watch?v=eSP7PLTXNy8
+uv run speekify --lang fr https://x.com/w1nklerr/status/2060057563991884060
 
 speekify --url https://example.com/article
 uv run speekify --url https://example.com/article

@@ -78,6 +78,8 @@ class PermissiveSuccessSynthesizer:
         speed: float,
         silence_duration: float,
         max_chunk_length: int | None,
+        detect_english_islands: bool,
+        english_lexicon_terms: tuple[str, ...] | None,
     ) -> SynthesisArtifact:
         self.synthesis_calls.append(
             {
@@ -89,6 +91,8 @@ class PermissiveSuccessSynthesizer:
                 "speed": speed,
                 "silence_duration": silence_duration,
                 "max_chunk_length": max_chunk_length,
+                "detect_english_islands": detect_english_islands,
+                "english_lexicon_terms": english_lexicon_terms,
             }
         )
         assert voice == "M1"
@@ -248,6 +252,8 @@ def test_generate_audio_passes_supertonic_options(tmp_path) -> None:
             "speed": 1.05,
             "silence_duration": 0.2,
             "max_chunk_length": 240,
+            "detect_english_islands": True,
+            "english_lexicon_terms": None,
         }
     ]
 
@@ -315,3 +321,28 @@ def test_generate_audio_writes_json_metadata_and_podcast_feed(tmp_path, monkeypa
     assert channel.findtext("link") == "https://audio.example.com/speekify"
     assert enclosure.attrib["length"] == "3"
     assert enclosure.attrib["type"] == "audio/wav"
+
+
+def test_generate_audio_loads_custom_english_lexicon(tmp_path) -> None:
+    lexicon_path = tmp_path / "english.txt"
+    lexicon_path.write_text("# comment\nretrieval\n\n", encoding="utf-8")
+    synthesizer = PermissiveSuccessSynthesizer()
+
+    asyncio.run(
+        generate_audio(
+            GenerationRequest(
+                source_text="Bonjour 😀 monde",
+                voice="M1",
+                language_code="fr",
+                speed=1.05,
+                steps=8,
+                english_lexicon_path=lexicon_path,
+                output_dir=tmp_path,
+            ),
+            synthesizer=synthesizer,
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert synthesizer.synthesis_calls[0]["english_lexicon_terms"] == ("retrieval",)
