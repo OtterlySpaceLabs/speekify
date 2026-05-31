@@ -85,6 +85,17 @@ def _parse_voice_name(value: str) -> str:
     return normalized
 
 
+def _parse_feed_base_url(value: str) -> str:
+    if not value.strip():
+        return ""
+    from speekify.metadata import normalize_feed_base_url
+
+    try:
+        return normalize_feed_base_url(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
 SourceArgument = Annotated[
     list[str] | None,
     typer.Argument(
@@ -172,6 +183,18 @@ OutputDirOption = Annotated[
     Path | None,
     typer.Option("--output-dir", help="Directory where the WAV file is written."),
 ]
+FeedBaseUrlOption = Annotated[
+    str,
+    typer.Option(
+        "--feed-base-url",
+        envvar="SPEEKIFY_FEED_BASE_URL",
+        callback=_parse_feed_base_url,
+        help=(
+            "Public http(s) directory URL for podcast enclosure URLs, for example "
+            "https://audio.example.com/speekify. Can also be set with SPEEKIFY_FEED_BASE_URL."
+        ),
+    ),
+]
 VerboseOption = Annotated[
     bool,
     typer.Option("--verbose", help="Show technical diagnostics such as log file paths."),
@@ -241,6 +264,7 @@ def generation_command(
     english_islands: EnglishIslandsOption = True,
     english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
+    feed_base_url: FeedBaseUrlOption = "",
     tags: TagsOption = True,
     tag_sentiment: TagSentimentOption = True,
     tag_sigh: TagSighOption = True,
@@ -260,6 +284,7 @@ def generation_command(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
+        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -325,6 +350,7 @@ def _run_generation(
     english_islands: bool,
     english_lexicon_path: Path | None,
     output_dir: Path | None,
+    feed_base_url: str,
     tags: bool,
     tag_sentiment: bool,
     tag_sigh: bool,
@@ -366,6 +392,7 @@ def _run_generation(
                         title=title.strip(),
                         is_url_mode=is_url_mode,
                         output_dir=output_dir or Path.cwd(),
+                        feed_base_url=feed_base_url,
                         tagging_config=tagging_config,
                     ),
                     synthesizer=synthesizer,
@@ -636,6 +663,7 @@ def _format_status(message: str) -> str:
         "loading model": "Loading speech model",
         "synthesizing": "Generating speech",
         "saving": "Saving WAV file",
+        "writing metadata": "Writing metadata and podcast feed",
     }
     return f"[cyan]{labels.get(message, message.capitalize())}...[/cyan]"
 
@@ -681,6 +709,10 @@ def _render_generation_success(generation: Any, *, log_path: Path | None) -> Non
     table.add_column("Field", style="bold")
     table.add_column("Value")
     table.add_row("File", str(generation.output_path))
+    if getattr(generation, "metadata_path", None) is not None:
+        table.add_row("Metadata", str(generation.metadata_path))
+    if getattr(generation, "feed_path", None) is not None:
+        table.add_row("Podcast feed", str(generation.feed_path))
     table.add_row("Duration", f"{generation.artifact.duration_seconds:.2f}s")
     table.add_row("Batches", str(generation.artifact.batch_count))
     if log_path is not None:
@@ -702,6 +734,10 @@ def _render_generation_success(generation: Any, *, log_path: Path | None) -> Non
         overflow="ignore",
         crop=False,
     )
+    if getattr(generation, "metadata_path", None) is not None:
+        console.print(f"Metadata: {generation.metadata_path}", style="green")
+    if getattr(generation, "feed_path", None) is not None:
+        console.print(f"Podcast feed: {generation.feed_path}", style="green")
     console.print(f"Duration: {generation.artifact.duration_seconds:.2f}s", style="green")
     _render_warnings(generation.artifact.summary_notes())
 
