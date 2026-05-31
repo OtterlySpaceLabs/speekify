@@ -30,10 +30,10 @@ from speekify.config import (
     MIN_STEPS,
     SUPPORTED_TTS_LANGUAGES,
     UNKNOWN_TTS_LANGUAGE,
-    VOICE_NAMES,
 )
 from speekify.console import console, error_console
 from speekify.logging_utils import configure_logger
+from speekify.validation import normalize_feed_base_url, normalize_language_code, normalize_voice_name
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 PACKAGE_NAME = "speekify"
@@ -68,28 +68,20 @@ SETUP_HELP = "Download and warm up the models used by Speekify."
 
 
 def _parse_language_code(value: str) -> str:
-    normalized = value.strip().lower()
-    if normalized not in SUPPORTED_TTS_LANGUAGES:
-        available = ", ".join(SUPPORTED_TTS_LANGUAGES)
-        raise typer.BadParameter(
-            f"Language code must be supported by Supertonic. Available values: {available}"
-        )
-    return normalized
+    try:
+        return normalize_language_code(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def _parse_voice_name(value: str) -> str:
-    normalized = value.strip().upper()
-    if normalized not in VOICE_NAMES:
-        available = ", ".join(VOICE_NAMES)
-        raise typer.BadParameter(f"Voice must be one of: {available}")
-    return normalized
+    try:
+        return normalize_voice_name(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def _parse_feed_base_url(value: str) -> str:
-    if not value.strip():
-        return ""
-    from speekify.metadata import normalize_feed_base_url
-
     try:
         return normalize_feed_base_url(value)
     except ValueError as exc:
@@ -361,14 +353,12 @@ def _run_generation(
         raise click.UsageError("A text source, URL, or stdin is required.")
 
     logger, log_path = configure_logger(verbose=verbose)
-    synthesizer = _build_synthesizer()
-    translator = _build_translator()
     tagging_config = _build_tagging_config(
         enabled=tags,
         use_sentiment=tag_sentiment,
         enable_sigh=tag_sigh,
     )
-    tagger = _build_tagger(tagging_config)
+    dependencies = _build_generation_dependencies(tagging_config)
 
     try:
         with console.status(_format_status("starting"), spinner="dots") as status:
@@ -395,9 +385,9 @@ def _run_generation(
                         feed_base_url=feed_base_url,
                         tagging_config=tagging_config,
                     ),
-                    synthesizer=synthesizer,
-                    translator=translator,
-                    tagger=tagger,
+                    synthesizer=dependencies.synthesizer,
+                    translator=dependencies.translator,
+                    tagger=dependencies.tagger,
                     logger=logger,
                     status_callback=update_status,
                 )
@@ -552,9 +542,9 @@ def _build_translator() -> object:
 
 
 def _build_sentiment_analyzer() -> object:
-    from speekify.tagging.cardiff import CardiffSentimentAnalyzer
+    from speekify.dependencies import build_sentiment_analyzer
 
-    return CardiffSentimentAnalyzer()
+    return build_sentiment_analyzer()
 
 
 def _build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bool) -> object:
@@ -568,13 +558,26 @@ def _build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bo
 
 
 def _build_tagger(tagging_config: object) -> object:
-    from speekify.tagging import SupertoneTagger
-    from speekify.tagging.cardiff import CardiffSentimentAnalyzer
+    from speekify.dependencies import build_tagger
 
     sentiment_analyzer = None
     if getattr(tagging_config, "use_sentiment", False):
-        sentiment_analyzer = CardiffSentimentAnalyzer()
-    return SupertoneTagger(config=tagging_config, sentiment_analyzer=sentiment_analyzer)
+        sentiment_analyzer = _build_sentiment_analyzer()
+    return build_tagger(tagging_config, sentiment_analyzer=sentiment_analyzer)
+
+
+def _build_generation_dependencies(tagging_config: object) -> object:
+    from speekify.dependencies import GenerationDependencyFactories, build_generation_dependencies
+
+    return build_generation_dependencies(
+        tagging_config,
+        factories=GenerationDependencyFactories(
+            synthesizer_factory=_build_synthesizer,
+            translator_factory=_build_translator,
+            sentiment_analyzer_factory=_build_sentiment_analyzer,
+        ),
+        tagger_factory=_build_tagger,
+    )
 
 
 def _build_generation_request(**kwargs: Any) -> object:

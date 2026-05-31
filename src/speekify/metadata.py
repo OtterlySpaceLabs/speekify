@@ -5,11 +5,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import format_datetime
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 from speekify.extract import ExtractedContent, is_single_url_input
 from speekify.tts import SynthesisArtifact
+from speekify.validation import normalize_feed_base_url
 
 METADATA_SCHEMA = "https://otterly.space/speekify/metadata/v1"
 RSS_FEED_FILENAME = "speekify-feed.xml"
@@ -26,40 +27,42 @@ class GenerationMetadata:
     feed_path: Path
 
 
-def write_generation_metadata(
-    *,
-    output_path: Path,
-    title: str,
-    content: ExtractedContent,
-    source_text: str,
-    voice: str,
-    voice_style_path: Path | None,
-    language_code: str,
-    speed: float,
-    steps: int,
-    max_chunk_length: int | None,
-    silence_duration: float,
-    artifact: SynthesisArtifact,
-    feed_base_url: str = "",
-    created_at: datetime | None = None,
-) -> GenerationMetadata:
-    timestamp = _utc_timestamp(created_at)
-    normalized_feed_base_url = normalize_feed_base_url(feed_base_url)
-    metadata_path = output_path.with_suffix(".json")
-    feed_path = output_path.parent / RSS_FEED_FILENAME
+@dataclass(frozen=True)
+class GenerationMetadataRequest:
+    output_path: Path
+    title: str
+    content: ExtractedContent
+    source_text: str
+    voice: str
+    voice_style_path: Path | None
+    language_code: str
+    speed: float
+    steps: int
+    max_chunk_length: int | None
+    silence_duration: float
+    artifact: SynthesisArtifact
+    feed_base_url: str = ""
+    created_at: datetime | None = None
+
+
+def write_generation_metadata(request: GenerationMetadataRequest) -> GenerationMetadata:
+    timestamp = _utc_timestamp(request.created_at)
+    normalized_feed_base_url = normalize_feed_base_url(request.feed_base_url)
+    metadata_path = request.output_path.with_suffix(".json")
+    feed_path = request.output_path.parent / RSS_FEED_FILENAME
     payload = _build_metadata_payload(
-        output_path=output_path,
-        title=title,
-        content=content,
-        source_text=source_text,
-        voice=voice,
-        voice_style_path=voice_style_path,
-        language_code=language_code,
-        speed=speed,
-        steps=steps,
-        max_chunk_length=max_chunk_length,
-        silence_duration=silence_duration,
-        artifact=artifact,
+        output_path=request.output_path,
+        title=request.title,
+        content=request.content,
+        source_text=request.source_text,
+        voice=request.voice,
+        voice_style_path=request.voice_style_path,
+        language_code=request.language_code,
+        speed=request.speed,
+        steps=request.steps,
+        max_chunk_length=request.max_chunk_length,
+        silence_duration=request.silence_duration,
+        artifact=request.artifact,
         feed_base_url=normalized_feed_base_url,
         created_at=timestamp,
     )
@@ -68,7 +71,7 @@ def write_generation_metadata(
         encoding="utf-8",
     )
     rebuild_podcast_feed(
-        output_path.parent,
+        request.output_path.parent,
         feed_base_url=normalized_feed_base_url,
         created_at=timestamp,
     )
@@ -172,16 +175,6 @@ def _build_metadata_payload(
             "feed_url": _media_url(RSS_FEED_FILENAME, feed_base_url, fallback_uri=""),
         },
     }
-
-
-def normalize_feed_base_url(feed_base_url: str) -> str:
-    candidate = feed_base_url.strip().rstrip("/")
-    if not candidate:
-        return ""
-    parsed = urlparse(candidate)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("Feed base URL must be an http:// or https:// URL.")
-    return candidate
 
 
 def _media_url(file_name: str, feed_base_url: str, *, fallback_uri: str) -> str:

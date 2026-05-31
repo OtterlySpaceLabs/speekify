@@ -15,7 +15,7 @@ from speekify.config import (
     MIN_STEPS,
 )
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
-from speekify.metadata import write_generation_metadata
+from speekify.metadata import GenerationMetadataRequest, write_generation_metadata
 from speekify.naming import build_output_path
 from speekify.tagging import SupertoneTagger, TaggingConfig
 from speekify.multilingual import load_english_lexicon
@@ -260,19 +260,21 @@ async def generate_audio(
     _update_status(status_callback, "writing metadata")
     metadata = await asyncio.to_thread(
         write_generation_metadata,
-        output_path=output_path,
-        title=output_title,
-        content=content,
-        source_text=request.source_text,
-        voice=request.voice,
-        voice_style_path=request.voice_style_path,
-        language_code=request.language_code,
-        speed=request.speed,
-        steps=request.steps,
-        max_chunk_length=request.max_chunk_length,
-        silence_duration=request.silence_duration,
-        artifact=artifact,
-        feed_base_url=request.feed_base_url,
+        GenerationMetadataRequest(
+            output_path=output_path,
+            title=output_title,
+            content=content,
+            source_text=request.source_text,
+            voice=request.voice,
+            voice_style_path=request.voice_style_path,
+            language_code=request.language_code,
+            speed=request.speed,
+            steps=request.steps,
+            max_chunk_length=request.max_chunk_length,
+            silence_duration=request.silence_duration,
+            artifact=artifact,
+            feed_base_url=request.feed_base_url,
+        ),
     )
     logger.info("Metadata saved path=%s feed_path=%s", metadata.metadata_path, metadata.feed_path)
 

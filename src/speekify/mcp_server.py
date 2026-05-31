@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Literal
@@ -18,11 +19,20 @@ from speekify.config import (
     SUPPORTED_TTS_LANGUAGES,
     VOICE_NAMES,
 )
+from speekify.dependencies import CachedGenerationDependencyFactory
 from speekify.logging_utils import configure_logger
 from speekify.tagging import TaggingConfig
+from speekify.validation import (
+    normalize_feed_base_url,
+    normalize_language_code,
+    normalize_source_text,
+    normalize_voice_name,
+)
 from speekify.workflow import GenerationRequest, GenerationResult, generate_audio
 
 TransportName = Literal["stdio", "streamable-http"]
+_DEPENDENCY_CACHE = CachedGenerationDependencyFactory()
+_GENERATION_LOCK: asyncio.Lock | None = None
 
 
 def generation_defaults() -> dict[str, object]:
@@ -53,6 +63,7 @@ async def generate_wav(
     max_chunk_length: int | None = None,
     silence_duration: float = DEFAULT_SILENCE_DURATION,
     output_dir: str | None = None,
+    feed_base_url: str = "",
     tags: bool = True,
     tag_sentiment: bool = True,
     tag_sigh: bool = True,
@@ -71,6 +82,7 @@ async def generate_wav(
         max_chunk_length=max_chunk_length,
         silence_duration=silence_duration,
         output_dir=output_dir,
+        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -93,29 +105,16 @@ def _build_request(
     max_chunk_length: int | None,
     silence_duration: float,
     output_dir: str | None,
+    feed_base_url: str = "",
     tags: bool,
     tag_sentiment: bool,
     tag_sigh: bool,
 ) -> GenerationRequest:
-    normalized_voice = voice.strip().upper()
-    if normalized_voice not in VOICE_NAMES:
-        available = ", ".join(VOICE_NAMES)
-        raise ValueError(f"Voice must be one of: {available}")
-
-    normalized_language = language_code.strip().lower()
-    if normalized_language not in SUPPORTED_TTS_LANGUAGES:
-        available = ", ".join(SUPPORTED_TTS_LANGUAGES)
-        raise ValueError(f"Language code must be one of: {available}")
-
-    source_text = source.strip()
-    if not source_text:
-        raise ValueError("A text source or URL is required.")
-
     return GenerationRequest(
-        source_text=source_text,
-        voice=normalized_voice,
+        source_text=normalize_source_text(source),
+        voice=normalize_voice_name(voice),
         voice_style_path=Path(custom_style_path).expanduser() if custom_style_path else None,
-        language_code=normalized_language,
+        language_code=normalize_language_code(language_code),
         speed=speed,
         steps=steps,
         max_chunk_length=max_chunk_length,
@@ -123,6 +122,7 @@ def _build_request(
         title=title.strip(),
         is_url_mode=is_url_mode,
         output_dir=Path(output_dir).expanduser() if output_dir else Path.cwd(),
+        feed_base_url=normalize_feed_base_url(feed_base_url),
         tagging_config=TaggingConfig(
             enabled=tags,
             use_sentiment=tags and tag_sentiment,
@@ -136,38 +136,22 @@ async def _generate_with_dependencies(
     *,
     logger: logging.Logger,
 ) -> GenerationResult:
-    import asyncio
-
-    if not hasattr(_generate_with_dependencies, "_lock"):
-        from speekify.translation import HuggingFaceTranslator
-        from speekify.tts import SupertonicSynthesizer
-
-        _generate_with_dependencies._lock = asyncio.Lock()  # type: ignore[attr-defined]
-        _generate_with_dependencies._translator = HuggingFaceTranslator()  # type: ignore[attr-defined]
-        _generate_with_dependencies._synthesizer = SupertonicSynthesizer()  # type: ignore[attr-defined]
-        _generate_with_dependencies._sentiment_analyzer = None  # type: ignore[attr-defined]
-
-    from speekify.tagging import SupertoneTagger
-    from speekify.tagging.cardiff import CardiffSentimentAnalyzer
-
-    sentiment_analyzer = None
-    if request.tagging_config.use_sentiment:
-        cached = getattr(_generate_with_dependencies, "_sentiment_analyzer", None)
-        if cached is None:
-            cached = CardiffSentimentAnalyzer()
-            _generate_with_dependencies._sentiment_analyzer = cached  # type: ignore[attr-defined]
-        sentiment_analyzer = cached
-
-    tagger = SupertoneTagger(config=request.tagging_config, sentiment_analyzer=sentiment_analyzer)
-
-    async with _generate_with_dependencies._lock:  # type: ignore[attr-defined]
+    dependencies = _DEPENDENCY_CACHE.build(request.tagging_config)
+    async with _generation_lock():
         return await generate_audio(
             request,
-            synthesizer=_generate_with_dependencies._synthesizer,  # type: ignore[attr-defined]
-            translator=_generate_with_dependencies._translator,  # type: ignore[attr-defined]
-            tagger=tagger,
+            synthesizer=dependencies.synthesizer,
+            translator=dependencies.translator,
+            tagger=dependencies.tagger,
             logger=logger,
         )
+
+
+def _generation_lock() -> asyncio.Lock:
+    global _GENERATION_LOCK
+    if _GENERATION_LOCK is None:
+        _GENERATION_LOCK = asyncio.Lock()
+    return _GENERATION_LOCK
 
 
 def _serialize_generation(
@@ -177,9 +161,15 @@ def _serialize_generation(
     log_path: Path,
 ) -> dict[str, object]:
     output_path = generation.output_path.resolve()
+    metadata_path = generation.metadata_path.resolve() if generation.metadata_path is not None else None
+    feed_path = generation.feed_path.resolve() if generation.feed_path is not None else None
     return {
         "output_path": str(output_path),
         "output_uri": output_path.as_uri(),
+        "metadata_path": str(metadata_path) if metadata_path is not None else "",
+        "metadata_uri": metadata_path.as_uri() if metadata_path is not None else "",
+        "feed_path": str(feed_path) if feed_path is not None else "",
+        "feed_uri": feed_path.as_uri() if feed_path is not None else "",
         "duration_seconds": generation.artifact.duration_seconds,
         "batch_count": generation.artifact.batch_count,
         "title": request.title or generation.content.best_title(),
@@ -208,6 +198,7 @@ def create_mcp_server() -> Any:
         max_chunk_length: int | None = None,
         silence_duration: float = DEFAULT_SILENCE_DURATION,
         output_dir: str | None = None,
+        feed_base_url: str = "",
         tags: bool = True,
         tag_sentiment: bool = True,
         tag_sigh: bool = True,
@@ -225,6 +216,7 @@ def create_mcp_server() -> Any:
             max_chunk_length=max_chunk_length,
             silence_duration=silence_duration,
             output_dir=output_dir,
+            feed_base_url=feed_base_url,
             tags=tags,
             tag_sentiment=tag_sentiment,
             tag_sigh=tag_sigh,

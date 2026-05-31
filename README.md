@@ -213,7 +213,7 @@ stream episodes.
 
 Speekify also ships a local Model Context Protocol (MCP) server so AI assistants can call Speekify as a tool during automations. The server exposes:
 
-- `speekify_generate_wav`: convert inline text or readable URL content to a local WAV file and return structured metadata (`output_path`, `output_uri`, duration, title, warnings, and log path).
+- `speekify_generate_wav`: convert inline text or readable URL content to a local WAV file and return structured metadata (`output_path`, `output_uri`, sidecar/feed paths, duration, title, warnings, and log path). Pass `feed_base_url` when the output directory is mirrored to public HTTP(S) hosting.
 - `speekify_generation_defaults`: inspect supported voices, languages, and generation ranges before calling the generator.
 - `news_recap_to_audio`: a prompt template for the common workflow “check news sources, summarize them, then generate WAV files for each URL and for the final recap.”
 
