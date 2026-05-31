@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import html
+import json
 import logging
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from xml.etree import ElementTree as ET
 
 import httpx
 import trafilatura
+import yt_dlp
 
 from speekify.config import MIN_URL_TEXT_LENGTH
 from speekify.logging_utils import LOGGER_NAME
@@ -25,6 +28,11 @@ DEFAULT_FETCH_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9,fr-FR;q=0.8,fr;q=0.7",
 }
+
+YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+X_HOSTS = {"x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"}
+YOUTUBE_TRANSCRIPT_LANG_PREFIXES = ("en",)
+YOUTUBE_SUBTITLE_FORMAT_PRIORITY = ("json3", "vtt", "srv3", "ttml", "srt")
 
 MEDIUM_GRAPHQL_HEADERS = {
     **DEFAULT_FETCH_HEADERS,
@@ -56,9 +64,7 @@ class ExtractedContent:
 
 
 def normalize_text(text: str) -> str:
-    collapsed_lines = [
-        re.sub(r"[ \t]+", " ", line).strip() for line in text.strip().splitlines()
-    ]
+    collapsed_lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.strip().splitlines()]
     normalized_lines: list[str] = []
     previous_blank = False
     for line in collapsed_lines:
@@ -93,8 +99,20 @@ def is_single_url_input(text: str) -> bool:
 
 async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> ExtractedContent:
     validated_url = validate_url(url)
+    if _looks_like_youtube_url(validated_url):
+        return await _extract_youtube_transcript(validated_url, min_chars=min_chars)
+
     should_attempt_medium_fallback = False
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        if _looks_like_x_status_url(validated_url):
+            extracted = await _extract_x_status_from_oembed(
+                client,
+                validated_url,
+                min_chars=min_chars,
+            )
+            if extracted is not None:
+                return extracted
+
         direct_error: httpx.HTTPError | None = None
         try:
             response = await client.get(validated_url, headers=DEFAULT_FETCH_HEADERS)
@@ -104,7 +122,9 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
                 return extracted
         except httpx.HTTPStatusError as exc:
             direct_error = exc
-            should_attempt_medium_fallback = _should_retry_with_medium_feed(validated_url, exc.response)
+            should_attempt_medium_fallback = _should_retry_with_medium_feed(
+                validated_url, exc.response
+            )
             if not should_attempt_medium_fallback:
                 raise
         except httpx.HTTPError as exc:
@@ -143,6 +163,194 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
     if direct_error is not None:
         raise direct_error
     raise ValueError("Le contenu lisible extrait de cette URL est trop court.")
+
+
+def _looks_like_youtube_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    return host in YOUTUBE_HOSTS or host.endswith(".youtube.com")
+
+
+def _looks_like_x_status_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if host not in X_HOSTS:
+        return False
+    return re.search(r"/(?:[^/]+/status|i/article)/\d+", parsed.path) is not None
+
+
+async def _extract_youtube_transcript(url: str, min_chars: int) -> ExtractedContent:
+    logger.info("YouTube transcript extraction triggered url=%s", url)
+    info = await asyncio.to_thread(_extract_youtube_info, url)
+    transcript_source = _select_youtube_transcript_source(info)
+    if transcript_source is None:
+        raise ValueError("Aucun transcript anglais disponible pour cette vidéo YouTube.")
+
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        response = await client.get(transcript_source["url"], headers=DEFAULT_FETCH_HEADERS)
+        response.raise_for_status()
+
+    text = _extract_text_from_youtube_subtitles(response.text, transcript_source.get("ext", ""))
+    if len(text) < min_chars:
+        raise ValueError("Le transcript anglais extrait de cette vidéo YouTube est trop court.")
+
+    title = info.get("title", "")
+    if not isinstance(title, str):
+        title = ""
+    return ExtractedContent(text=text, title=title)
+
+
+def _extract_youtube_info(url: str) -> dict[str, object]:
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": False,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if not isinstance(info, dict):
+        raise ValueError("Impossible de lire les métadonnées de cette vidéo YouTube.")
+    return info
+
+
+def _select_youtube_transcript_source(info: dict[str, object]) -> dict[str, str] | None:
+    for source_group_name in ("subtitles", "automatic_captions"):
+        source_group = info.get(source_group_name, {})
+        if not isinstance(source_group, dict):
+            continue
+        candidates = _select_youtube_language_tracks(source_group)
+        selected = _select_preferred_youtube_track(candidates)
+        if selected is not None:
+            return selected
+    return None
+
+
+def _select_youtube_language_tracks(source_group: dict[object, object]) -> list[dict[str, str]]:
+    for lang, tracks in source_group.items():
+        if not isinstance(lang, str) or not lang.lower().startswith(
+            YOUTUBE_TRANSCRIPT_LANG_PREFIXES
+        ):
+            continue
+        if not isinstance(tracks, list):
+            continue
+        normalized_tracks: list[dict[str, str]] = []
+        for track in tracks:
+            if not isinstance(track, dict):
+                continue
+            url = track.get("url", "")
+            if not isinstance(url, str) or not url:
+                continue
+            ext = track.get("ext", "")
+            normalized_tracks.append({"url": url, "ext": ext if isinstance(ext, str) else ""})
+        if normalized_tracks:
+            return normalized_tracks
+    return []
+
+
+def _select_preferred_youtube_track(tracks: list[dict[str, str]]) -> dict[str, str] | None:
+    if not tracks:
+        return None
+    for preferred_ext in YOUTUBE_SUBTITLE_FORMAT_PRIORITY:
+        for track in tracks:
+            if track.get("ext") == preferred_ext:
+                return track
+    return tracks[0]
+
+
+def _extract_text_from_youtube_subtitles(subtitle_text: str, subtitle_ext: str) -> str:
+    if subtitle_ext == "json3" or subtitle_text.lstrip().startswith("{"):
+        return _extract_text_from_youtube_json3(subtitle_text)
+    return _extract_text_from_timed_subtitle_text(subtitle_text)
+
+
+def _extract_text_from_youtube_json3(subtitle_text: str) -> str:
+    try:
+        payload = json.loads(subtitle_text)
+    except json.JSONDecodeError:
+        return ""
+
+    events = payload.get("events", [])
+    if not isinstance(events, list):
+        return ""
+
+    text_parts: list[str] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        segments = event.get("segs", [])
+        if not isinstance(segments, list):
+            continue
+        segment_text = "".join(
+            segment.get("utf8", "")
+            for segment in segments
+            if isinstance(segment, dict) and isinstance(segment.get("utf8", ""), str)
+        )
+        stripped_segment_text = segment_text.strip()
+        if stripped_segment_text:
+            text_parts.append(stripped_segment_text)
+    return normalize_text(" ".join(text_parts))
+
+
+def _extract_text_from_timed_subtitle_text(subtitle_text: str) -> str:
+    text_parts: list[str] = []
+    previous_text = ""
+    for raw_line in subtitle_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.upper() == "WEBVTT" or line.startswith(("Kind:", "Language:")):
+            continue
+        if "-->" in line or re.fullmatch(r"\d+", line):
+            continue
+        cleaned_line = re.sub(r"<[^>]+>", "", line)
+        cleaned_line = html.unescape(cleaned_line).strip()
+        if cleaned_line and cleaned_line != previous_text:
+            text_parts.append(cleaned_line)
+            previous_text = cleaned_line
+    return normalize_text(" ".join(text_parts))
+
+
+async def _extract_x_status_from_oembed(
+    client: httpx.AsyncClient,
+    status_url: str,
+    min_chars: int,
+) -> ExtractedContent | None:
+    oembed_url = "https://publish.x.com/oembed?" + urlencode(
+        {"url": status_url, "omit_script": "true", "dnt": "true"}
+    )
+    try:
+        response = await client.get(oembed_url, headers=DEFAULT_FETCH_HEADERS)
+        response.raise_for_status()
+    except httpx.HTTPError:
+        logger.info("X oEmbed extraction failed url=%s", status_url, exc_info=True)
+        return None
+
+    payload = response.json()
+    if not isinstance(payload, dict):
+        return None
+    rendered_html = payload.get("html", "")
+    if not isinstance(rendered_html, str):
+        return None
+
+    text = _extract_text_from_html_fragment(rendered_html)
+    text = _strip_x_embed_footer(text)
+    if len(text) < min_chars:
+        return None
+
+    author_name = payload.get("author_name", "")
+    title = f"X post by {author_name}" if isinstance(author_name, str) and author_name else "X post"
+    return ExtractedContent(text=text, title=title)
+
+
+def _strip_x_embed_footer(text: str) -> str:
+    lines = []
+    for line in normalize_text(text).splitlines():
+        stripped_line = line.strip()
+        if stripped_line.startswith("—"):
+            continue
+        lines.append(stripped_line)
+    return normalize_text("\n".join(lines))
 
 
 def _extract_from_html(html_text: str, min_chars: int) -> ExtractedContent | None:
