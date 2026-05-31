@@ -1,0 +1,3 @@
+speekify.example.com {
+    reverse_proxy /mcp 127.0.0.1:8000
+}

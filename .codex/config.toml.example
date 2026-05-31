@@ -1,0 +1,7 @@
+[mcp_servers.speekify]
+command = "uv"
+args = ["run", "speekify-mcp"]
+
+# Optional tuning for local audio generation workloads.
+startup_timeout_sec = 20
+tool_timeout_sec = 600
