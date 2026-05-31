@@ -136,23 +136,38 @@ async def _generate_with_dependencies(
     *,
     logger: logging.Logger,
 ) -> GenerationResult:
+    import asyncio
+
+    if not hasattr(_generate_with_dependencies, "_lock"):
+        from speekify.translation import HuggingFaceTranslator
+        from speekify.tts import SupertonicSynthesizer
+
+        _generate_with_dependencies._lock = asyncio.Lock()  # type: ignore[attr-defined]
+        _generate_with_dependencies._translator = HuggingFaceTranslator()  # type: ignore[attr-defined]
+        _generate_with_dependencies._synthesizer = SupertonicSynthesizer()  # type: ignore[attr-defined]
+        _generate_with_dependencies._sentiment_analyzer = None  # type: ignore[attr-defined]
+
     from speekify.tagging import SupertoneTagger
     from speekify.tagging.cardiff import CardiffSentimentAnalyzer
-    from speekify.translation import HuggingFaceTranslator
-    from speekify.tts import SupertonicSynthesizer
 
     sentiment_analyzer = None
     if request.tagging_config.use_sentiment:
-        sentiment_analyzer = CardiffSentimentAnalyzer()
+        cached = getattr(_generate_with_dependencies, "_sentiment_analyzer", None)
+        if cached is None:
+            cached = CardiffSentimentAnalyzer()
+            _generate_with_dependencies._sentiment_analyzer = cached  # type: ignore[attr-defined]
+        sentiment_analyzer = cached
+
     tagger = SupertoneTagger(config=request.tagging_config, sentiment_analyzer=sentiment_analyzer)
 
-    return await generate_audio(
-        request,
-        synthesizer=SupertonicSynthesizer(),
-        translator=HuggingFaceTranslator(),
-        tagger=tagger,
-        logger=logger,
-    )
+    async with _generate_with_dependencies._lock:  # type: ignore[attr-defined]
+        return await generate_audio(
+            request,
+            synthesizer=_generate_with_dependencies._synthesizer,  # type: ignore[attr-defined]
+            translator=_generate_with_dependencies._translator,  # type: ignore[attr-defined]
+            tagger=tagger,
+            logger=logger,
+        )
 
 
 def _serialize_generation(generation: GenerationResult, *, log_path: Path) -> dict[str, object]:
