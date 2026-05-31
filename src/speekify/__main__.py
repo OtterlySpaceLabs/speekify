@@ -45,7 +45,7 @@ def _build_cli_epilog() -> str:
         "Examples:",
         '  speekify "Hello world"',
         '  speekify --lang fr "Hello world"',
-        '  speekify --lang ja https://example.com/article',
+        "  speekify --lang ja https://example.com/article",
         "  printf 'Hello from stdin' | speekify",
         "",
         "Maintenance:",
@@ -72,8 +72,7 @@ def _parse_language_code(value: str) -> str:
     if normalized not in SUPPORTED_TTS_LANGUAGES:
         available = ", ".join(SUPPORTED_TTS_LANGUAGES)
         raise typer.BadParameter(
-            "Language code must be supported by Supertonic. "
-            f"Available values: {available}"
+            f"Language code must be supported by Supertonic. Available values: {available}"
         )
     return normalized
 
@@ -84,6 +83,17 @@ def _parse_voice_name(value: str) -> str:
         available = ", ".join(VOICE_NAMES)
         raise typer.BadParameter(f"Voice must be one of: {available}")
     return normalized
+
+
+def _parse_feed_base_url(value: str) -> str:
+    if not value.strip():
+        return ""
+    from speekify.metadata import normalize_feed_base_url
+
+    try:
+        return normalize_feed_base_url(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 SourceArgument = Annotated[
@@ -159,6 +169,18 @@ OutputDirOption = Annotated[
     Path | None,
     typer.Option("--output-dir", help="Directory where the WAV file is written."),
 ]
+FeedBaseUrlOption = Annotated[
+    str,
+    typer.Option(
+        "--feed-base-url",
+        envvar="SPEEKIFY_FEED_BASE_URL",
+        callback=_parse_feed_base_url,
+        help=(
+            "Public http(s) directory URL for podcast enclosure URLs, for example "
+            "https://audio.example.com/speekify. Can also be set with SPEEKIFY_FEED_BASE_URL."
+        ),
+    ),
+]
 VerboseOption = Annotated[
     bool,
     typer.Option("--verbose", help="Show technical diagnostics such as log file paths."),
@@ -211,6 +233,8 @@ setup_app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+
+
 @generation_app.command(help=GENERATION_HELP)
 def generation_command(
     source: SourceArgument = None,
@@ -224,6 +248,7 @@ def generation_command(
     max_chunk_length: MaxChunkLengthOption = None,
     silence_duration: SilenceDurationOption = DEFAULT_SILENCE_DURATION,
     output_dir: OutputDirOption = None,
+    feed_base_url: FeedBaseUrlOption = "",
     tags: TagsOption = True,
     tag_sentiment: TagSentimentOption = True,
     tag_sigh: TagSighOption = True,
@@ -241,6 +266,7 @@ def generation_command(
         max_chunk_length=max_chunk_length,
         silence_duration=silence_duration,
         output_dir=output_dir,
+        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -259,6 +285,8 @@ def setup_command(
         skip_sentiment=skip_sentiment,
         verbose=verbose,
     )
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) == 1 and argv[0] in {"--version", "-v"}:
@@ -302,6 +330,7 @@ def _run_generation(
     max_chunk_length: int | None,
     silence_duration: float,
     output_dir: Path | None,
+    feed_base_url: str,
     tags: bool,
     tag_sentiment: bool,
     tag_sigh: bool,
@@ -341,6 +370,7 @@ def _run_generation(
                         title=title.strip(),
                         is_url_mode=is_url_mode,
                         output_dir=output_dir or Path.cwd(),
+                        feed_base_url=feed_base_url,
                         tagging_config=tagging_config,
                     ),
                     synthesizer=synthesizer,
@@ -407,8 +437,7 @@ def _build_doctor_report() -> list[tuple[str, str, str]]:
     logger, log_path = configure_logger(verbose=False)
     report = _doctor_runtime_report(log_path)
     report.extend(
-        _check_dependency(module_name, label=label)
-        for module_name, label in _doctor_dependencies()
+        _check_dependency(module_name, label=label) for module_name, label in _doctor_dependencies()
     )
     report.extend(
         _check_model_load(label, load_model=load_model, logger=logger)
@@ -612,6 +641,7 @@ def _format_status(message: str) -> str:
         "loading model": "Loading speech model",
         "synthesizing": "Generating speech",
         "saving": "Saving WAV file",
+        "writing metadata": "Writing metadata and podcast feed",
     }
     return f"[cyan]{labels.get(message, message.capitalize())}...[/cyan]"
 
@@ -657,6 +687,10 @@ def _render_generation_success(generation: Any, *, log_path: Path | None) -> Non
     table.add_column("Field", style="bold")
     table.add_column("Value")
     table.add_row("File", str(generation.output_path))
+    if getattr(generation, "metadata_path", None) is not None:
+        table.add_row("Metadata", str(generation.metadata_path))
+    if getattr(generation, "feed_path", None) is not None:
+        table.add_row("Podcast feed", str(generation.feed_path))
     table.add_row("Duration", f"{generation.artifact.duration_seconds:.2f}s")
     table.add_row("Batches", str(generation.artifact.batch_count))
     if log_path is not None:
@@ -678,6 +712,10 @@ def _render_generation_success(generation: Any, *, log_path: Path | None) -> Non
         overflow="ignore",
         crop=False,
     )
+    if getattr(generation, "metadata_path", None) is not None:
+        console.print(f"Metadata: {generation.metadata_path}", style="green")
+    if getattr(generation, "feed_path", None) is not None:
+        console.print(f"Podcast feed: {generation.feed_path}", style="green")
     console.print(f"Duration: {generation.artifact.duration_seconds:.2f}s", style="green")
     _render_warnings(generation.artifact.summary_notes())
 

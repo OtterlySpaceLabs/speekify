@@ -114,6 +114,7 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
         assert request.voice_style_path == voice_style_path
         assert request.max_chunk_length == 240
         assert request.silence_duration == 0.2
+        assert request.feed_base_url == "https://audio.example.com/speekify"
         return GenerationResult(
             output_path=tmp_path / "options.wav",
             artifact=SynthesisArtifact(
@@ -135,19 +136,35 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
     monkeypatch.setattr("speekify.__main__._build_synthesizer", object)
     monkeypatch.setattr("speekify.__main__._build_translator", object)
 
-    exit_code = main([
-        "--custom-style-path",
-        str(voice_style_path),
-        "--max-chunk-length",
-        "240",
-        "--silence-duration",
-        "0.2",
-        "Hello",
-    ])
+    exit_code = main(
+        [
+            "--custom-style-path",
+            str(voice_style_path),
+            "--max-chunk-length",
+            "240",
+            "--silence-duration",
+            "0.2",
+            "--feed-base-url",
+            "https://audio.example.com/speekify/",
+            "Hello",
+        ]
+    )
     stdout = capsys.readouterr().out
 
     assert exit_code == 0
     assert str(tmp_path / "options.wav") in stdout
+
+
+def test_main_rejects_invalid_feed_base_url(capsys) -> None:
+    try:
+        main(["--feed-base-url", "not-a-url", "Hello"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - defensive guard
+        raise AssertionError("Expected SystemExit")
+
+    stderr = capsys.readouterr().err
+    assert "Feed base URL must be an http:// or https:// URL." in stderr
 
 
 def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) -> None:

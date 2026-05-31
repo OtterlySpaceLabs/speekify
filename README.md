@@ -75,6 +75,11 @@ printf 'Hello from stdin' | uv run speekify
 speekify --title my-article --output-dir ~/Desktop "Hello world"
 uv run speekify --title my-article --output-dir ~/Desktop "Hello world"
 
+# Generate a feed for a synced/static HTTPS podcast directory
+speekify --output-dir ~/Speekify/audio \
+  --feed-base-url https://audio.example.com/speekify \
+  https://example.com/article
+
 # Choose a voice
 speekify --voice F2 "Hello world"
 uv run speekify --voice F2 "Hello world"
@@ -146,6 +151,7 @@ uv run speekify setup --help
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
+| `--feed-base-url URL` | `SPEEKIFY_FEED_BASE_URL` or local file URLs | Public `http://` or `https://` directory URL used for RSS enclosure URLs, for example after syncing the output directory to static hosting. |
 | `--tags / --no-tags` | `--tags` | Add sparse Supertonic inline speech tags, mainly `<breath>`. |
 | `--tag-sentiment / --no-tag-sentiment` | `--tag-sentiment` | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
 | `--tag-sigh / --no-tag-sigh` | `--tag-sigh` | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
@@ -168,6 +174,35 @@ By default, direct CLI generation writes the WAV file into the current working d
 ```text
 ./article-title-20260528-183000.wav
 ```
+
+Each WAV now gets a parallel JSON sidecar with the same stem, for example
+`./article-title-20260528-183000.json`. The sidecar records the source mode/URL,
+extracted title, generated audio file, duration, byte size, language, voice, speed,
+steps, chunk settings, and podcast enclosure metadata. Speekify also refreshes
+`./speekify-feed.xml` in the output directory as a small personal podcast-style RSS
+feed. By default the feed uses local `file://` enclosures for desktop tools and future
+local interfaces. For a real podcast app on another device, put the output directory
+somewhere reachable by HTTP(S) and run Speekify with `--feed-base-url` (or set
+`SPEEKIFY_FEED_BASE_URL`) so the RSS `<enclosure>` URLs point at that synced/static
+location.
+
+Typical consultation/sync patterns:
+
+1. **Same machine:** open the WAV files directly or index the JSON sidecars from a
+   local UI.
+2. **Same Wi-Fi or VPN:** run `python -m http.server 8000` inside the output
+   directory and subscribe from a podcast app to
+   `http://<computer-ip>:8000/speekify-feed.xml`. This only works while the computer
+   is reachable.
+3. **All devices:** sync/upload the output directory to static HTTPS hosting such as
+   a small VPS, S3/R2-compatible bucket, Tailscale Serve/Funnel, or another web
+   server, then pass the public directory as `--feed-base-url`. Subscribe to
+   `<base-url>/speekify-feed.xml` in a podcast app.
+
+Podcast apps generally need the RSS feed and every WAV enclosure URL to be reachable
+from the device. A Dropbox/iCloud/Syncthing folder is useful for moving the files,
+but it still needs an HTTP(S) serving layer if you want standard podcast apps to
+stream episodes.
 
 ## Release for maintainers
 
