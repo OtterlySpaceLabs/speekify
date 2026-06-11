@@ -41,6 +41,16 @@ Speekify is a Python CLI that turns inline text, piped stdin, or the readable bo
 .PP
 The default workflow accepts plain text, piped text, or a single URL. URL input is reduced to readable article content before synthesis. English input can be translated to French before text to speech, and sparse speech tags can be added before generation.
 .PP
+When passing a URL that contains shell-special characters such as
+.B ?
+or
+.B &
+\&(common with YouTube URLs), wrap it in quotes. In shells such as
+.BR zsh ,
+the shell can reject the command before
+.B speekify
+starts.
+.PP
 Use
 .B speekify setup
 to pre-download and warm the local AI models.
@@ -186,6 +196,11 @@ Generate French speech.
 .TP
 .B speekify https://example.com/article
 Extract readable article text and synthesize it.
+.TP
+.B speekify "https://www.youtube.com/watch?v=eSP7PLTXNy8"
+Extract a YouTube transcript. Quote URLs that contain shell-special characters such as
+.B ?
+\&.
 .TP
 .B printf 'Hello from stdin' | speekify
 Read the text from standard input.

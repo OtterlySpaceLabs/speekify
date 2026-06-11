@@ -1,0 +1,6 @@
+[mcp_servers.speekify]
+args = [
+    "run",
+    "speekify-mcp",
+]
+command = "uv"

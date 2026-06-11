@@ -43,10 +43,12 @@ Speekify is a CLI. Provide inline text, a URL, or piped stdin. URL mode supports
 ```bash
 speekify "Hello world"
 speekify https://example.com/article
-speekify --lang fr https://www.youtube.com/watch?v=eSP7PLTXNy8
+speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"
 speekify --lang fr https://x.com/w1nklerr/status/2060057563991884060
 printf 'Hello from stdin' | speekify
 ```
+
+When passing a URL that contains shell-special characters such as `?` or `&` (common with YouTube URLs), wrap it in quotes. This is required in shells like `zsh`, otherwise the shell can reject the command before Speekify starts.
 
 The CLI uses concise Rich output: progress/status indicators during longer work, a result panel when the WAV file is ready, and readable error messages. Technical log paths are shown only with `--verbose`.
 
@@ -66,8 +68,11 @@ uv run speekify --lang fr "Hello world"
 speekify https://example.com/article
 uv run speekify https://example.com/article
 
-speekify --lang fr https://www.youtube.com/watch?v=eSP7PLTXNy8
-uv run speekify --lang fr https://x.com/w1nklerr/status/2060057563991884060
+speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"
+uv run speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"
+
+speekify --lang fr "https://x.com/w1nklerr/status/2060057563991884060"
+uv run speekify --lang fr "https://x.com/w1nklerr/status/2060057563991884060"
 
 speekify --url https://example.com/article
 uv run speekify --url https://example.com/article
