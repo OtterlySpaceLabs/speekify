@@ -150,7 +150,12 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
     assert str(tmp_path / "options.wav") in stdout
 
 
-def test_main_rejects_invalid_feed_base_url(capsys) -> None:
+def test_main_rejects_invalid_feed_base_url(capsys, monkeypatch) -> None:
+    # Keep the Rich error panel wide enough that the message is not wrapped,
+    # otherwise the substring assertion below depends on the terminal width.
+    from speekify.console import error_console
+
+    monkeypatch.setattr(error_console, "_width", 200)
     try:
         main(["--feed-base-url", "not-a-url", "Hello"])
     except SystemExit as exc:

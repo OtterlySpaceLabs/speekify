@@ -152,6 +152,74 @@ async def test_extract_url_uses_x_oembed_for_status(monkeypatch) -> None:
     )
 
 
+@pytest.mark.asyncio
+async def test_extract_url_rejects_x_url_when_oembed_fails(monkeypatch) -> None:
+    article_url = "https://x.com/w1nklerr/article/2060057563991884060"
+    requested_urls: list[str] = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+            requested_urls.append(url)
+            request = httpx.Request("GET", url, headers=headers)
+            if url.startswith("https://publish.x.com/oembed?"):
+                response = httpx.Response(404, request=request)
+                raise httpx.HTTPStatusError("not found", request=request, response=response)
+            return httpx.Response(
+                200,
+                request=request,
+                text=(
+                    "<html><body><p>We’ve detected that JavaScript is disabled in this "
+                    "browser. Please enable JavaScript or switch to a supported browser "
+                    "to continue using x.com.</p></body></html>"
+                ),
+            )
+
+    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(ValueError, match="post X"):
+        await extract_url(article_url, min_chars=40)
+
+    assert all(url.startswith("https://publish.x.com/oembed?") for url in requested_urls)
+
+
+@pytest.mark.asyncio
+async def test_extract_url_rejects_x_status_when_oembed_text_is_too_short(monkeypatch) -> None:
+    status_url = "https://x.com/w1nklerr/status/2060057563991884060"
+
+    class FakeAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+            request = httpx.Request("GET", url, headers=headers)
+            assert url.startswith("https://publish.x.com/oembed?")
+            return httpx.Response(
+                200,
+                request=request,
+                json={"author_name": "winkle.", "html": "<blockquote><p>Short.</p></blockquote>"},
+            )
+
+    monkeypatch.setattr("speekify.extract.httpx.AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(ValueError, match="post X"):
+        await extract_url(status_url, min_chars=40)
+
+
 def test_extract_text_from_youtube_json3_joins_segments() -> None:
     assert (
         _extract_text_from_youtube_json3(

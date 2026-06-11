@@ -14,7 +14,7 @@ uv run pyinstaller \
   --clean \
   --noconfirm \
   --paths src \
-  --collect-all textual \
+  --copy-metadata speekify \
   --collect-all supertonic \
   --collect-all trafilatura \
   --collect-all transformers \

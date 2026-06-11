@@ -15,8 +15,11 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 - `src/speekify/user_config.py`: optional TOML generation defaults from `~/.config/speekify/config.toml` or `SPEEKIFY_CONFIG`.
 - `src/speekify/naming.py`: deterministic, filesystem-safe output path creation.
 - `src/speekify/tts.py`: Supertonic adapter and permissive text preparation.
+- `src/speekify/multilingual.py`: French-English island segmentation and optional English lexicon loading.
 - `src/speekify/tagging/`: sparse Supertonic inline tag placement with rules, CardiffNLP sentiment, and capped emotion tags.
 - `src/speekify/translation.py`: English-to-French translation support when French synthesis is requested.
+- `src/speekify/metadata.py`: JSON sidecars and the local podcast RSS feed.
+- `src/speekify/mcp_server.py`: local MCP server exposing the generation tools.
 
 ## Runtime Decisions
 
@@ -37,6 +40,8 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 - `speekify setup` warms Supertonic, CardiffNLP sentiment, and English-to-French translation by default. Use `--skip-sentiment` or `--skip-translation` to skip optional setup downloads.
 - Supertonic handles normal long-text chunking internally via `max_chunk_length` and `silence_duration`; Speekify only splits external batches above the SDK text limit.
 - URL extraction produces readable article/body text, not raw HTML.
+- X/Twitter extraction uses the public oEmbed endpoint only; X articles and protected or very short posts fail with a clear error instead of falling back to the JavaScript-required x.com HTML page.
+- `--english-islands` (default on) pronounces known English tech terms as English islands during French synthesis; `--english-lexicon-path` extends the lexicon.
 - A single URL source is auto-detected; `--url` can force URL extraction mode.
 - `--dry-run` and `speekify inspect` preview extraction, translation, tagging, and planned output paths without synthesis.
 - `speekify feed rebuild` rebuilds the RSS feed from JSON sidecars; `speekify feed validate` checks sidecars and referenced WAV files.

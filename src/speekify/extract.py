@@ -48,6 +48,14 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
             )
             if extracted is not None:
                 return extracted
+            # x.com serves a JavaScript-required error page to plain HTTP clients,
+            # so falling back to generic HTML extraction can only synthesize that
+            # error page. Fail clearly instead.
+            raise ValueError(
+                "Impossible d'extraire le texte de ce post X. Les articles X et les"
+                " posts protégés ou très courts nécessitent une session connectée,"
+                " qui n'est pas prise en charge."
+            )
 
         try:
             response = await client.get(validated_url, headers=DEFAULT_FETCH_HEADERS)

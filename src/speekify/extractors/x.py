@@ -16,7 +16,7 @@ def looks_like_x_status_url(url: str) -> bool:
     host = parsed.netloc.lower()
     if host not in X_HOSTS:
         return False
-    return re.search(r"/(?:[^/]+/status|i/article)/\d+", parsed.path) is not None
+    return re.search(r"/(?:[^/]+/(?:status|article)|i/article)/\d+", parsed.path) is not None
 
 
 async def extract_x_status_from_oembed(

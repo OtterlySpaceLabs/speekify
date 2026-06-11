@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -2007,6 +2007,7 @@ name = "speekify"
 version = "0.0.6"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "httpx" },
     { name = "langdetect" },
     { name = "mcp" },
@@ -2031,6 +2032,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.1" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langdetect", specifier = ">=1.0.9" },
     { name = "mcp", specifier = ">=1.13" },
@@ -2041,7 +2043,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.8" },
     { name = "trafilatura", specifier = ">=1.9" },
     { name = "transformers", specifier = ">=4.57" },
-    { name = "typer", specifier = ">=0.12" },
+    { name = "typer", specifier = ">=0.12,<0.26" },
     { name = "yt-dlp", specifier = ">=2024.12.13" },
 ]
 

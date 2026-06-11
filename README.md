@@ -38,7 +38,7 @@ If you skip setup, the models can still download automatically on first use.
 
 ## Run
 
-Speekify is a CLI. Provide inline text, a URL, or piped stdin. URL mode supports readable articles, YouTube video transcripts (English captions/transcripts when available), and X/Twitter post text:
+Speekify is a CLI. Provide inline text, a URL, or piped stdin. URL mode supports readable articles, YouTube video transcripts (English captions/transcripts when available), and public X/Twitter post text (via the public oEmbed endpoint). X articles (`x.com/<user>/article/...`), protected posts, and very short posts cannot be extracted without a logged-in session and fail with a clear error instead:
 
 ```bash
 speekify "Hello world"
@@ -170,6 +170,8 @@ feed_base_url = "https://audio.example.com/speekify"
 tags = true
 tag_sentiment = true
 tag_sigh = true
+english_islands = true
+# english_lexicon_path = "~/Speekify/english-terms.txt"
 ```
 
 ### CLI options reference
@@ -184,6 +186,8 @@ tag_sigh = true
 | `--steps N` | `10` | Number of synthesis steps (`1`–`100`). Higher values may improve quality. |
 | `--max-chunk-length N` | *(auto)* | Maximum characters per internal Supertonic chunk. Leave unset for Supertonic's language-aware default. |
 | `--silence-duration SECONDS` | `0.25` | Silence between Supertonic chunks. Smaller values can make long-form narration feel tighter. |
+| `--english-islands / --no-english-islands` | `--english-islands` | When `--lang fr`, pronounce known English tech terms (AI, API, machine learning, ...) as English islands instead of French. |
+| `--english-lexicon-path PATH` | — | Newline-delimited file of extra English terms to treat as English islands during French synthesis. Lines starting with `#` are ignored. |
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
@@ -304,6 +308,7 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - `speekify setup` warms the CardiffNLP sentiment model used by the default emotion tagging. Use `setup --skip-sentiment` only if you want to skip that download during setup.
 - `<breath>` is the primary inline tag. `<sigh>` is enabled by default but remains rare and capped.
 - URL mode extracts readable body text rather than raw HTML.
+- X/Twitter extraction only works for public posts exposed through the public oEmbed endpoint. X articles, protected accounts, and posts whose text is too short are reported as extraction errors because they would require a logged-in session.
 - A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.
 - Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
 - Supertonic handles normal long-text chunking internally. Very large inputs above the SDK text limit are split into external batches automatically and merged into one final WAV file.

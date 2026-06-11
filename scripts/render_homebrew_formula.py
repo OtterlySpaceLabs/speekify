@@ -13,7 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sha256", required=True, help="SHA256 of the release tarball")
     parser.add_argument(
         "--homepage",
-        default="https://github.com/hiboux/speekify",
+        default="https://github.com/OtterlySpaceLabs/speekify",
         help="Project homepage",
     )
     parser.add_argument(
