@@ -11,3 +11,6 @@ output/
 dist/
 build/
 speekify.spec
+*.wav
+speekify-feed.xml
+*-*.json
