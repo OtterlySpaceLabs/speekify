@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from speekify.config import (
+    AUTO_TTS_LANGUAGE,
     DEFAULT_SILENCE_DURATION,
     DEFAULT_SPEED,
     DEFAULT_STEPS,
-    DEFAULT_TTS_LANG,
     DEFAULT_VOICE,
     MAX_SPEED,
     MAX_STEPS,
@@ -28,7 +28,7 @@ TransportName = Literal["stdio", "streamable-http"]
 def generation_defaults() -> dict[str, object]:
     """Return MCP-friendly defaults and ranges for Speekify generation."""
     return {
-        "language_code": DEFAULT_TTS_LANG,
+        "language_code": AUTO_TTS_LANGUAGE,
         "voice": DEFAULT_VOICE,
         "speed": DEFAULT_SPEED,
         "steps": DEFAULT_STEPS,
@@ -48,7 +48,7 @@ async def generate_wav(
     title: str = "",
     voice: str = DEFAULT_VOICE,
     custom_style_path: str | None = None,
-    language_code: str = DEFAULT_TTS_LANG,
+    language_code: str = AUTO_TTS_LANGUAGE,
     speed: float = DEFAULT_SPEED,
     steps: int = DEFAULT_STEPS,
     max_chunk_length: int | None = None,
@@ -164,7 +164,7 @@ def create_mcp_server() -> Any:
         title: str = "",
         voice: str = DEFAULT_VOICE,
         custom_style_path: str | None = None,
-        language_code: str = DEFAULT_TTS_LANG,
+        language_code: str = AUTO_TTS_LANGUAGE,
         speed: float = DEFAULT_SPEED,
         steps: int = DEFAULT_STEPS,
         max_chunk_length: int | None = None,

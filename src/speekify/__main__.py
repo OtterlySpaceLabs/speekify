@@ -25,10 +25,10 @@ from speekify.cli_rendering import (
     render_setup_success as _render_setup_success,
 )
 from speekify.config import (
+    AUTO_TTS_LANGUAGE,
     DEFAULT_SILENCE_DURATION,
     DEFAULT_SPEED,
     DEFAULT_STEPS,
-    DEFAULT_TTS_LANG,
     DEFAULT_VOICE,
     MAX_SPEED,
     MAX_STEPS,
@@ -123,7 +123,11 @@ LanguageOption = Annotated[
     typer.Option(
         "--lang",
         callback=_parse_language_code,
-        help="Supertonic ISO 639-1 language code, for example en, fr, ja, or na.",
+        help=(
+            "Supertonic ISO 639-1 language code, for example en, fr, ja, or na. "
+            "Omit to auto-detect the document language (no translation); "
+            "pass --lang fr to translate English input to French."
+        ),
     ),
 ]
 SpeedOption = Annotated[
@@ -249,7 +253,7 @@ def generation_command(
     title: TitleOption = "",
     voice: VoiceOption = DEFAULT_VOICE,
     custom_style_path: CustomStylePathOption = None,
-    language_code: LanguageOption = DEFAULT_TTS_LANG,
+    language_code: LanguageOption = AUTO_TTS_LANGUAGE,
     speed: SpeedOption = DEFAULT_SPEED,
     steps: StepsOption = DEFAULT_STEPS,
     max_chunk_length: MaxChunkLengthOption = None,
@@ -311,7 +315,7 @@ def inspect_command(
     title: TitleOption = "",
     voice: VoiceOption = DEFAULT_VOICE,
     custom_style_path: CustomStylePathOption = None,
-    language_code: LanguageOption = DEFAULT_TTS_LANG,
+    language_code: LanguageOption = AUTO_TTS_LANGUAGE,
     speed: SpeedOption = DEFAULT_SPEED,
     steps: StepsOption = DEFAULT_STEPS,
     max_chunk_length: MaxChunkLengthOption = None,

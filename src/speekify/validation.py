@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from speekify.config import SUPPORTED_TTS_LANGUAGES, VOICE_NAMES
+from speekify.config import AUTO_TTS_LANGUAGE, SUPPORTED_TTS_LANGUAGES, VOICE_NAMES
 
 
 def normalize_voice_name(value: str) -> str:
@@ -13,6 +13,8 @@ def normalize_voice_name(value: str) -> str:
 
 def normalize_language_code(value: str) -> str:
     normalized = value.strip().lower()
+    if normalized == AUTO_TTS_LANGUAGE:
+        return normalized
     if normalized not in SUPPORTED_TTS_LANGUAGES:
         available = ", ".join(SUPPORTED_TTS_LANGUAGES)
         raise ValueError(

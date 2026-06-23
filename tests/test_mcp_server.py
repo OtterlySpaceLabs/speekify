@@ -13,7 +13,7 @@ from speekify.workflow import GenerationResult
 def test_generation_defaults_are_mcp_serializable() -> None:
     defaults = generation_defaults()
 
-    assert defaults["language_code"] == "fr"
+    assert defaults["language_code"] == "auto"
     assert defaults["voice"] == "M5"
     assert defaults["english_islands"] is True
     assert "fr" in defaults["supported_languages"]
@@ -196,7 +196,7 @@ def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> No
         title="",
         voice="M5",
         custom_style_path=None,
-        language_code="fr",
+        language_code="auto",
         speed=0.98,
         steps=10,
         max_chunk_length=None,

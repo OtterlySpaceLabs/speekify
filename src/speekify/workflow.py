@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Callable
 
 from speekify.config import (
+    AUTO_TTS_LANGUAGE,
     DEFAULT_TRANSLATION_TARGET_LANG,
     DEFAULT_SILENCE_DURATION,
+    DEFAULT_TTS_LANG,
     MAX_SPEED,
     MAX_STEPS,
     MIN_SPEED,
     MIN_STEPS,
+    SUPPORTED_TTS_LANGUAGES,
 )
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
 from speekify.extract_common import is_document_path_input, read_document
@@ -20,7 +23,7 @@ from speekify.naming import build_output_path
 from speekify.tagging import SupertoneTagger, TaggingConfig
 from speekify.multilingual import load_english_lexicon
 from speekify.tts import PreparedText, SynthesisArtifact, SupertonicSynthesizer
-from speekify.translation import HuggingFaceTranslator
+from speekify.translation import HuggingFaceTranslator, detect_language_code
 
 StatusCallback = Callable[[str], None]
 
@@ -62,23 +65,25 @@ class GenerationInspection:
     english_lexicon_terms: int = 0
 
 
+@dataclass(frozen=True)
+class ResolvedContent:
+    content: ExtractedContent
+    language_code: str
+
+
 def _update_status(status_callback: StatusCallback | None, message: str) -> None:
     if status_callback is not None:
         status_callback(message)
 
 
-async def resolve_content(
+async def _extract_content(
     raw_input: str,
     *,
     is_url_mode: bool,
-    target_language: str,
-    translator: HuggingFaceTranslator,
     logger: logging.Logger,
-    status_callback: StatusCallback | None = None,
+    status_callback: StatusCallback | None,
 ) -> ExtractedContent:
-    should_extract_url = is_url_mode or is_single_url_input(raw_input)
-
-    if should_extract_url:
+    if is_url_mode or is_single_url_input(raw_input):
         _update_status(status_callback, "extracting URL")
         extracted = await extract_url(raw_input)
         logger.info(
@@ -87,37 +92,53 @@ async def resolve_content(
             len(extracted.text),
             not is_url_mode,
         )
-        return await translate_content_if_needed(
-            extracted,
-            target_language=target_language,
-            translator=translator,
-            logger=logger,
-            status_callback=status_callback,
-        )
+        return extracted
 
     if not is_url_mode and is_document_path_input(raw_input):
         _update_status(status_callback, "reading file")
         content = await asyncio.to_thread(read_document, Path(raw_input.strip()))
         logger.info("File read path=%s text_length=%s", raw_input.strip(), len(content.text))
-        return await translate_content_if_needed(
-            content,
-            target_language=target_language,
-            translator=translator,
-            logger=logger,
-            status_callback=status_callback,
-        )
+        return content
 
     normalized_text = normalize_text(raw_input)
     if not normalized_text:
         raise ValueError("Text cannot be empty.")
     logger.info("Text normalized text_length=%s", len(normalized_text))
-    return await translate_content_if_needed(
-        ExtractedContent(text=normalized_text),
-        target_language=target_language,
-        translator=translator,
+    return ExtractedContent(text=normalized_text)
+
+
+async def resolve_content(
+    raw_input: str,
+    *,
+    is_url_mode: bool,
+    requested_language: str,
+    translator: HuggingFaceTranslator,
+    logger: logging.Logger,
+    status_callback: StatusCallback | None = None,
+) -> ResolvedContent:
+    content = await _extract_content(
+        raw_input,
+        is_url_mode=is_url_mode,
         logger=logger,
         status_callback=status_callback,
     )
+
+    if requested_language != AUTO_TTS_LANGUAGE:
+        translated = await translate_content_if_needed(
+            content,
+            target_language=requested_language,
+            translator=translator,
+            logger=logger,
+            status_callback=status_callback,
+        )
+        return ResolvedContent(content=translated, language_code=requested_language)
+
+    _update_status(status_callback, "checking language")
+    detected = await asyncio.to_thread(detect_language_code, content.text)
+    # ponytail: detection returns None on short/ambiguous text; fall back to the project default.
+    effective = detected if detected in SUPPORTED_TTS_LANGUAGES else DEFAULT_TTS_LANG
+    logger.info("Language auto-detected source=%r effective=%r", detected, effective)
+    return ResolvedContent(content=content, language_code=effective)
 
 
 async def translate_content_if_needed(
@@ -175,14 +196,16 @@ async def generate_audio(
     _validate_generation_request(request)
     english_lexicon_terms = await _load_english_lexicon_terms(request, logger=logger)
 
-    content = await resolve_content(
+    resolved = await resolve_content(
         request.source_text,
         is_url_mode=request.is_url_mode,
-        target_language=request.language_code,
+        requested_language=request.language_code,
         translator=translator,
         logger=logger,
         status_callback=status_callback,
     )
+    content = resolved.content
+    language_code = resolved.language_code
     _update_status(status_callback, "preparing text")
     prepared_text = await asyncio.to_thread(synthesizer.prepare_text, content.text)
     logger.info(
@@ -200,7 +223,7 @@ async def generate_audio(
         tagging_result = await asyncio.to_thread(
             active_tagger.tag,
             prepared_text.text,
-            language_code=request.language_code,
+            language_code=language_code,
         )
         logger.info(
             "Speech tags checked changed=%s counts=%s sentiment_used=%s",
@@ -234,7 +257,7 @@ async def generate_audio(
         prepared_text=prepared_text,
         voice=request.voice,
         voice_style_path=request.voice_style_path,
-        lang=request.language_code,
+        lang=language_code,
         steps=request.steps,
         speed=request.speed,
         silence_duration=request.silence_duration,
@@ -279,14 +302,16 @@ async def inspect_generation(
     _validate_generation_request(request)
     english_lexicon_terms = await _load_english_lexicon_terms(request, logger=logger)
 
-    content = await resolve_content(
+    resolved = await resolve_content(
         request.source_text,
         is_url_mode=request.is_url_mode,
-        target_language=request.language_code,
+        requested_language=request.language_code,
         translator=translator,
         logger=logger,
         status_callback=status_callback,
     )
+    content = resolved.content
+    language_code = resolved.language_code
     _update_status(status_callback, "preparing text")
     normalized_text = normalize_text(content.text)
     prepared_text = PreparedText(
@@ -305,7 +330,7 @@ async def inspect_generation(
         tagging_result = await asyncio.to_thread(
             active_tagger.tag,
             prepared_text.text,
-            language_code=request.language_code,
+            language_code=language_code,
         )
         tag_counts = dict(tagging_result.tag_counts)
         sentiment_used = tagging_result.sentiment_used

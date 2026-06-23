@@ -37,7 +37,7 @@ def test_main_generates_from_cli_text_into_current_directory(tmp_path, monkeypat
     async def fake_run_generation(request, **_: object) -> GenerationResult:
         assert request.source_text == "Hello from the CLI"
         assert request.output_dir == tmp_path
-        assert request.language_code == "fr"
+        assert request.language_code == "auto"
         assert request.voice == "M5"
         assert request.speed == 0.98
         assert request.steps == 10

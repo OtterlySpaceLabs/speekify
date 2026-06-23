@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Literal
 
 from speekify.config import (
+    AUTO_TTS_LANGUAGE,
     DEFAULT_SILENCE_DURATION,
     DEFAULT_SPEED,
     DEFAULT_STEPS,
-    DEFAULT_TTS_LANG,
     DEFAULT_VOICE,
 )
 from speekify.dependencies import (
@@ -73,7 +73,7 @@ def build_generation_request(
     user_config = load_user_config() if use_user_config else UserConfig()
     voice = config_value(voice, DEFAULT_VOICE, user_config.voice)
     custom_style_path = config_value(custom_style_path, None, user_config.custom_style_path)
-    language_code = config_value(language_code, DEFAULT_TTS_LANG, user_config.language_code)
+    language_code = config_value(language_code, AUTO_TTS_LANGUAGE, user_config.language_code)
     speed = config_value(speed, DEFAULT_SPEED, user_config.speed)
     steps = config_value(steps, DEFAULT_STEPS, user_config.steps)
     max_chunk_length = config_value(max_chunk_length, None, user_config.max_chunk_length)

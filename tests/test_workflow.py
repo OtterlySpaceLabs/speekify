@@ -120,11 +120,11 @@ def test_resolve_content_autodetects_single_url_input(monkeypatch) -> None:
 
     monkeypatch.setattr("speekify.workflow.extract_url", fake_extract_url)
 
-    content = asyncio.run(
+    resolved = asyncio.run(
         resolve_content(
             " https://www.faketech.fr/p/le-gros-mytho-danthropic ",
             is_url_mode=False,
-            target_language="fr",
+            requested_language="fr",
             translator=NoopTranslator(),
             logger=logging.getLogger("speekify.tests.workflow"),
             status_callback=statuses.append,
@@ -132,7 +132,8 @@ def test_resolve_content_autodetects_single_url_input(monkeypatch) -> None:
     )
 
     assert captured["url"] == " https://www.faketech.fr/p/le-gros-mytho-danthropic "
-    assert content == ExtractedContent(text="Contenu extrait", title="Article")
+    assert resolved.content == ExtractedContent(text="Contenu extrait", title="Article")
+    assert resolved.language_code == "fr"
     assert statuses == ["extracting URL", "checking language"]
 
 
@@ -141,18 +142,21 @@ def test_resolve_content_reads_text_file(tmp_path) -> None:
     doc.write_text("Bonjour depuis un fichier.\n", encoding="utf-8")
     statuses: list[str] = []
 
-    content = asyncio.run(
+    resolved = asyncio.run(
         resolve_content(
             str(doc),
             is_url_mode=False,
-            target_language="fr",
+            requested_language="fr",
             translator=NoopTranslator(),
             logger=logging.getLogger("speekify.tests.workflow"),
             status_callback=statuses.append,
         )
     )
 
-    assert content == ExtractedContent(text="Bonjour depuis un fichier.", title="Mon Article")
+    assert resolved.content == ExtractedContent(
+        text="Bonjour depuis un fichier.", title="Mon Article"
+    )
+    assert resolved.language_code == "fr"
     assert statuses == ["reading file", "checking language"]
 
 
@@ -201,20 +205,42 @@ def test_resolve_content_translates_english_text_to_french() -> None:
     translator = FrenchTranslator()
     statuses: list[str] = []
 
-    content = asyncio.run(
+    resolved = asyncio.run(
         resolve_content(
             "Hello everyone.",
             is_url_mode=False,
-            target_language="fr",
+            requested_language="fr",
             translator=translator,
             logger=logging.getLogger("speekify.tests.workflow"),
             status_callback=statuses.append,
         )
     )
 
-    assert content == ExtractedContent(text="Bonjour tout le monde.")
+    assert resolved.content == ExtractedContent(text="Bonjour tout le monde.")
+    assert resolved.language_code == "fr"
     assert translator.calls == ["Hello everyone."]
     assert statuses == ["checking language", "translating to French"]
+
+
+def test_resolve_content_auto_uses_detected_language_without_translation() -> None:
+    translator = FrenchTranslator()
+    statuses: list[str] = []
+
+    resolved = asyncio.run(
+        resolve_content(
+            "Cet article est écrit dans un français clair avec le plus grand soin possible.",
+            is_url_mode=False,
+            requested_language="auto",
+            translator=translator,
+            logger=logging.getLogger("speekify.tests.workflow"),
+            status_callback=statuses.append,
+        )
+    )
+
+    assert resolved.language_code == "fr"
+    assert resolved.content.text.startswith("Cet article")
+    assert translator.calls == []  # auto mode never translates
+    assert statuses == ["checking language"]
 
 
 def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
