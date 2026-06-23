@@ -7,7 +7,7 @@ Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/
 ## Architecture
 
 - `src/speekify/__main__.py`: CLI parser, command routing, and stdin handling.
-- `src/speekify/cli_rendering.py`: Rich status, success, warning, error, doctor, feed, and inspection output.
+- `src/speekify/cli_rendering.py`: Rich status, success, warning, error, doctor, and inspection output.
 - `src/speekify/setup.py`: setup command model warmup/progress implementation.
 - `src/speekify/workflow.py`: source resolution, optional translation, validation, inspection, synthesis orchestration, file saving.
 - `src/speekify/extract.py`: public extraction facade.
@@ -18,7 +18,6 @@ Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/
 - `src/speekify/multilingual.py`: French-English island segmentation and optional English lexicon loading.
 - `src/speekify/tagging/`: sparse Supertonic inline tag placement with rules, CardiffNLP sentiment, and capped emotion tags.
 - `src/speekify/translation.py`: English-to-French translation support when French synthesis is requested.
-- `src/speekify/metadata.py`: JSON sidecars and the local podcast RSS feed.
 - `src/speekify/mcp_server.py`: local MCP server exposing the generation tools.
 
 ## Runtime Decisions
@@ -45,7 +44,6 @@ Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/
 - A single URL source is auto-detected; `--url` can force URL extraction mode.
 - A source resolving to an existing `.txt`/`.md`/`.text`/`.pdf` file is read automatically (PDF text via `pypdf`) and the file name becomes the default title; `--url` skips file detection.
 - `--dry-run` and `speekify inspect` preview extraction, translation, tagging, and planned output paths without synthesis.
-- `speekify feed rebuild` rebuilds the RSS feed from JSON sidecars; `speekify feed validate` checks sidecars and referenced WAV files.
 - MCP generation exposes CLI-equivalent generation controls including English-island options and optional user-config defaults.
 - Running without a source and without piped stdin is an invalid CLI invocation.
 
@@ -61,8 +59,6 @@ speekify --no-tag-sentiment --no-tag-sigh "Hello world"
 speekify --custom-style-path ~/voices/my-voice.json "Hello world"
 speekify --dry-run https://example.com/article
 speekify inspect "Hello world"
-speekify feed rebuild --output-dir ~/Speekify/audio
-speekify feed validate --output-dir ~/Speekify/audio
 speekify setup
 speekify setup --skip-sentiment
 ```

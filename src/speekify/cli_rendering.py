@@ -25,7 +25,6 @@ def format_status(message: str) -> str:
         "loading model": "Loading speech model",
         "synthesizing": "Generating speech",
         "saving": "Saving WAV file",
-        "writing metadata": "Writing metadata and podcast feed",
         "building preview": "Building preview",
     }
     return f"[cyan]{labels.get(message, message.capitalize())}...[/cyan]"
@@ -72,10 +71,6 @@ def render_generation_success(generation: Any, *, log_path: Path | None) -> None
     table.add_column("Field", style="bold")
     table.add_column("Value")
     table.add_row("File", str(generation.output_path))
-    if getattr(generation, "metadata_path", None) is not None:
-        table.add_row("Metadata", str(generation.metadata_path))
-    if getattr(generation, "feed_path", None) is not None:
-        table.add_row("Podcast feed", str(generation.feed_path))
     table.add_row("Duration", f"{generation.artifact.duration_seconds:.2f}s")
     table.add_row("Batches", str(generation.artifact.batch_count))
     if log_path is not None:
@@ -97,10 +92,6 @@ def render_generation_success(generation: Any, *, log_path: Path | None) -> None
         overflow="ignore",
         crop=False,
     )
-    if getattr(generation, "metadata_path", None) is not None:
-        console.print(f"Metadata: {generation.metadata_path}", style="green")
-    if getattr(generation, "feed_path", None) is not None:
-        console.print(f"Podcast feed: {generation.feed_path}", style="green")
     console.print(f"Duration: {generation.artifact.duration_seconds:.2f}s", style="green")
     render_warnings(generation.artifact.summary_notes())
 
@@ -112,7 +103,6 @@ def render_inspection_success(inspection: Any, *, log_path: Path | None) -> None
     table.add_row("Mode", inspection.source_mode)
     table.add_row("Title", inspection.title)
     table.add_row("Planned file", str(inspection.output_path))
-    table.add_row("Planned feed", str(inspection.feed_path))
     table.add_row("Text characters", str(len(inspection.content.text)))
     table.add_row("Prepared characters", str(len(inspection.prepared_text.text)))
     if inspection.tag_counts:
@@ -138,7 +128,6 @@ def render_inspection_success(inspection: Any, *, log_path: Path | None) -> None
         )
     )
     console.print(f"Planned: {inspection.output_path}", style="green")
-    console.print(f"Podcast feed: {inspection.feed_path}", style="green")
     render_warnings(inspection.prepared_text.summary_notes())
 
 
@@ -198,39 +187,6 @@ def render_doctor_report(report: Sequence[tuple[str, str, str]]) -> None:
         error_console.print(DOCTOR_REMEDIATION, style="yellow")
     else:
         console.print("Doctor checks passed.", style="green")
-
-
-def render_feed_status(
-    inspection: Any,
-    *,
-    title: str,
-    feed_path: Path,
-    log_path: Path | None,
-) -> None:
-    table = Table(show_header=False, box=box.SIMPLE, expand=False)
-    table.add_column("Field", style="bold")
-    table.add_column("Value")
-    table.add_row("Output directory", str(inspection.output_dir))
-    table.add_row("Feed", str(feed_path))
-    table.add_row("Entries", str(inspection.entry_count))
-    table.add_row("Invalid metadata", str(len(inspection.invalid_metadata_paths)))
-    table.add_row("Missing audio", str(len(inspection.missing_audio_paths)))
-    if log_path is not None:
-        table.add_row("Log", str(log_path))
-
-    console.print(
-        Panel(
-            table,
-            title=title,
-            title_align="left",
-            border_style="green" if inspection.ok else "yellow",
-            box=box.ROUNDED,
-        )
-    )
-    for path in inspection.invalid_metadata_paths[:5]:
-        error_console.print(f"Invalid metadata: {path}", style="yellow")
-    for path in inspection.missing_audio_paths[:5]:
-        error_console.print(f"Missing audio: {path}", style="yellow")
 
 
 def render_warnings(notes: Sequence[str]) -> None:

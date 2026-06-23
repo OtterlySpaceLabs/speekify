@@ -56,7 +56,6 @@ async def generate_wav(
     english_islands: bool = True,
     english_lexicon_path: str | None = None,
     output_dir: str | None = None,
-    feed_base_url: str = "",
     tags: bool = True,
     tag_sentiment: bool = True,
     tag_sigh: bool = True,
@@ -78,7 +77,6 @@ async def generate_wav(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -104,7 +102,6 @@ def _build_request(
     english_islands: bool = True,
     english_lexicon_path: str | None = None,
     output_dir: str | None,
-    feed_base_url: str = "",
     tags: bool = True,
     tag_sentiment: bool = True,
     tag_sigh: bool = True,
@@ -124,7 +121,6 @@ def _build_request(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -143,15 +139,9 @@ def _serialize_generation(
     log_path: Path,
 ) -> dict[str, object]:
     output_path = generation.output_path.resolve()
-    metadata_path = generation.metadata_path.resolve() if generation.metadata_path is not None else None
-    feed_path = generation.feed_path.resolve() if generation.feed_path is not None else None
     return {
         "output_path": str(output_path),
         "output_uri": output_path.as_uri(),
-        "metadata_path": str(metadata_path) if metadata_path is not None else "",
-        "metadata_uri": metadata_path.as_uri() if metadata_path is not None else "",
-        "feed_path": str(feed_path) if feed_path is not None else "",
-        "feed_uri": feed_path.as_uri() if feed_path is not None else "",
         "duration_seconds": generation.artifact.duration_seconds,
         "batch_count": generation.artifact.batch_count,
         "title": request.title or generation.content.best_title(),
@@ -182,7 +172,6 @@ def create_mcp_server() -> Any:
         english_islands: bool = True,
         english_lexicon_path: str | None = None,
         output_dir: str | None = None,
-        feed_base_url: str = "",
         tags: bool = True,
         tag_sentiment: bool = True,
         tag_sigh: bool = True,
@@ -203,7 +192,6 @@ def create_mcp_server() -> Any:
             english_islands=english_islands,
             english_lexicon_path=english_lexicon_path,
             output_dir=output_dir,
-            feed_base_url=feed_base_url,
             tags=tags,
             tag_sentiment=tag_sentiment,
             tag_sigh=tag_sigh,

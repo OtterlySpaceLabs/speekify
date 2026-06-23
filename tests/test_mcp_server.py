@@ -37,7 +37,6 @@ def test_build_request_normalizes_and_validates_options(tmp_path) -> None:
         english_islands=False,
         english_lexicon_path=str(tmp_path / "english.txt"),
         output_dir=str(tmp_path),
-        feed_base_url="https://audio.example.com/speekify/",
         tags=True,
         tag_sentiment=False,
         tag_sigh=True,
@@ -50,7 +49,6 @@ def test_build_request_normalizes_and_validates_options(tmp_path) -> None:
     assert request.english_islands is False
     assert request.english_lexicon_path == tmp_path / "english.txt"
     assert request.output_dir == tmp_path
-    assert request.feed_base_url == "https://audio.example.com/speekify"
     assert request.tagging_config.enabled is True
     assert request.tagging_config.use_sentiment is False
     assert request.tagging_config.enable_sigh is True
@@ -79,7 +77,6 @@ def test_build_request_rejects_invalid_mcp_inputs(field: str, value: str, messag
         "english_islands": True,
         "english_lexicon_path": None,
         "output_dir": None,
-        "feed_base_url": "",
         "tags": True,
         "tag_sentiment": True,
         "tag_sigh": True,
@@ -91,16 +88,9 @@ def test_build_request_rejects_invalid_mcp_inputs(field: str, value: str, messag
 
 
 def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> None:
-    captured_feed_base_url: list[str] = []
-
     async def fake_generate_with_dependencies(request, *, logger):
-        captured_feed_base_url.append(request.feed_base_url)
         output_path = request.output_dir / "recap.wav"
-        metadata_path = request.output_dir / "recap.json"
-        feed_path = request.output_dir / "speekify-feed.xml"
         output_path.write_text("wav", encoding="utf-8")
-        metadata_path.write_text("{}", encoding="utf-8")
-        feed_path.write_text("<rss />", encoding="utf-8")
         return GenerationResult(
             output_path=output_path,
             artifact=SynthesisArtifact(
@@ -116,8 +106,6 @@ def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> N
                 ),
             ),
             content=ExtractedContent(text="Bonjour.", title="Recap"),
-            metadata_path=metadata_path,
-            feed_path=feed_path,
         )
 
     monkeypatch.setattr("speekify.mcp_server._generate_with_dependencies", fake_generate_with_dependencies)
@@ -129,17 +117,11 @@ def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> N
             voice="m5",
             language_code="FR",
             output_dir=str(tmp_path),
-            feed_base_url="https://audio.example.com/speekify/",
         )
     )
 
-    assert captured_feed_base_url == ["https://audio.example.com/speekify"]
     assert result["output_path"] == str((tmp_path / "recap.wav").resolve())
     assert result["output_uri"] == (tmp_path / "recap.wav").resolve().as_uri()
-    assert result["metadata_path"] == str((tmp_path / "recap.json").resolve())
-    assert result["metadata_uri"] == (tmp_path / "recap.json").resolve().as_uri()
-    assert result["feed_path"] == str((tmp_path / "speekify-feed.xml").resolve())
-    assert result["feed_uri"] == (tmp_path / "speekify-feed.xml").resolve().as_uri()
     assert result["duration_seconds"] == 3.25
     assert result["batch_count"] == 2
     assert result["title"] == "Recap"
@@ -201,7 +183,6 @@ def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> No
                 "english_islands = false",
                 f'english_lexicon_path = "{lexicon_path}"',
                 f'output_dir = "{output_dir}"',
-                'feed_base_url = "https://audio.example.com/speekify/"',
                 "tags = false",
             ]
         ),
@@ -223,7 +204,6 @@ def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> No
         english_islands=True,
         english_lexicon_path=None,
         output_dir=None,
-        feed_base_url="",
         tags=True,
         tag_sentiment=True,
         tag_sigh=True,
@@ -238,7 +218,6 @@ def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> No
     assert request.english_islands is False
     assert request.english_lexicon_path == lexicon_path
     assert request.output_dir == output_dir
-    assert request.feed_base_url == "https://audio.example.com/speekify"
     assert request.tagging_config.enabled is False
 
 

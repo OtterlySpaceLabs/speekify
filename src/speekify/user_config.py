@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from speekify.validation import (
-    normalize_feed_base_url,
     normalize_language_code,
     normalize_voice_name,
 )
@@ -27,7 +26,6 @@ class UserConfig:
     english_islands: bool | None = None
     english_lexicon_path: Path | None = None
     output_dir: Path | None = None
-    feed_base_url: str | None = None
     tags: bool | None = None
     tag_sentiment: bool | None = None
     tag_sigh: bool | None = None
@@ -69,7 +67,6 @@ def load_user_config(path: Path | None = None) -> UserConfig:
         english_islands=_optional_bool(generation.get("english_islands"), "english_islands"),
         english_lexicon_path=_optional_path(generation.get("english_lexicon_path")),
         output_dir=_optional_path(generation.get("output_dir")),
-        feed_base_url=_optional_feed_base_url(generation.get("feed_base_url")),
         tags=_optional_bool(generation.get("tags"), "tags"),
         tag_sentiment=_optional_bool(generation.get("tag_sentiment"), "tag_sentiment"),
         tag_sigh=_optional_bool(generation.get("tag_sigh"), "tag_sigh"),
@@ -98,14 +95,6 @@ def _optional_language(value: object) -> str | None:
     if not isinstance(value, str):
         raise ValueError("Speekify config language_code must be a string.")
     return normalize_language_code(value)
-
-
-def _optional_feed_base_url(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("Speekify config feed_base_url must be a string.")
-    return normalize_feed_base_url(value)
 
 
 def _optional_path(value: object) -> Path | None:

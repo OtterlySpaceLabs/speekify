@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from io import StringIO
-import json
 import re
 
 from speekify.__main__ import _build_doctor_report, main
@@ -111,7 +110,6 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
         assert request.voice_style_path == voice_style_path
         assert request.max_chunk_length == 240
         assert request.silence_duration == 0.2
-        assert request.feed_base_url == "https://audio.example.com/speekify"
         return GenerationResult(
             output_path=tmp_path / "options.wav",
             artifact=SynthesisArtifact(
@@ -139,8 +137,6 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
             "240",
             "--silence-duration",
             "0.2",
-            "--feed-base-url",
-            "https://audio.example.com/speekify/",
             "Hello",
         ]
     )
@@ -148,23 +144,6 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
 
     assert exit_code == 0
     assert str(tmp_path / "options.wav") in stdout
-
-
-def test_main_rejects_invalid_feed_base_url(capsys, monkeypatch) -> None:
-    # Keep the Rich error panel wide enough that the message is not wrapped,
-    # otherwise the substring assertion below depends on the terminal width.
-    from speekify.console import error_console
-
-    monkeypatch.setattr(error_console, "_width", 200)
-    try:
-        main(["--feed-base-url", "not-a-url", "Hello"])
-    except SystemExit as exc:
-        assert exc.code == 2
-    else:  # pragma: no cover - defensive guard
-        raise AssertionError("Expected SystemExit")
-
-    stderr = capsys.readouterr().err
-    assert "Feed base URL must be an http:// or https:// URL." in stderr
 
 
 def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) -> None:
@@ -442,7 +421,6 @@ def test_main_dry_run_renders_inspection(tmp_path, monkeypatch, capsys) -> None:
         assert request.source_text == "Hello preview"
         return GenerationInspection(
             output_path=tmp_path / "hello-preview.wav",
-            feed_path=tmp_path / "speekify-feed.xml",
             title="Hello preview",
             content=ExtractedContent(text="Hello preview"),
             prepared_text=PreparedText(
@@ -515,60 +493,6 @@ def test_main_uses_user_config_defaults(tmp_path, monkeypatch, capsys) -> None:
 
     assert exit_code == 0
     assert str(output_dir / "configured.wav") in stdout
-
-
-def test_main_feed_rebuild_and_validate(tmp_path, capsys) -> None:
-    wav_path = tmp_path / "episode.wav"
-    wav_path.write_text("wav", encoding="utf-8")
-    (tmp_path / "episode.json").write_text(
-        json.dumps(
-            {
-                "$schema": "https://otterly.space/speekify/metadata/v1",
-                "title": "Episode",
-                "created_at": "2026-05-31T12:00:00Z",
-                "audio": {
-                    "file": wav_path.name,
-                    "path": str(wav_path),
-                    "uri": wav_path.resolve().as_uri(),
-                    "mime_type": "audio/wav",
-                    "size_bytes": 3,
-                    "duration_seconds": 1.0,
-                },
-                "source": {
-                    "mode": "text",
-                    "url": "",
-                    "extracted_title": "",
-                    "text_characters": 7,
-                },
-                "synthesis": {
-                    "language_code": "fr",
-                    "voice": "M5",
-                    "voice_style_path": "",
-                    "speed": 0.98,
-                    "steps": 10,
-                    "silence_duration": 0.25,
-                    "max_chunk_length": None,
-                    "batch_count": 1,
-                },
-                "podcast": {
-                    "guid": wav_path.resolve().as_uri(),
-                    "enclosure_url": wav_path.resolve().as_uri(),
-                    "local_enclosure_uri": wav_path.resolve().as_uri(),
-                    "enclosure_type": "audio/wav",
-                    "feed_file": "speekify-feed.xml",
-                    "feed_url": "",
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    assert main(["feed", "rebuild", "--output-dir", str(tmp_path)]) == 0
-    assert (tmp_path / "speekify-feed.xml").exists()
-    assert main(["feed", "validate", "--output-dir", str(tmp_path)]) == 0
-    stdout = capsys.readouterr().out
-    assert "Podcast feed rebuilt" in stdout
-    assert "Podcast feed valid" in stdout
 
 
 def test_main_prints_version(monkeypatch, capsys) -> None:

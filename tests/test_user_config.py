@@ -20,7 +20,6 @@ def test_load_user_config_reads_generation_defaults(tmp_path) -> None:
                 "silence_duration = 0.3",
                 "english_islands = false",
                 f'output_dir = "{output_dir}"',
-                'feed_base_url = "https://audio.example.com/speekify/"',
                 "tags = false",
             ]
         ),
@@ -37,7 +36,6 @@ def test_load_user_config_reads_generation_defaults(tmp_path) -> None:
     assert config.silence_duration == 0.3
     assert config.english_islands is False
     assert config.output_dir == output_dir
-    assert config.feed_base_url == "https://audio.example.com/speekify"
     assert config.tags is False
 
 

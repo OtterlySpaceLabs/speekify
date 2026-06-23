@@ -19,7 +19,6 @@ from speekify.cli_rendering import (
     format_status as _format_status,
     render_cli_error as _render_cli_error,
     render_doctor_report as _render_doctor_report,
-    render_feed_status as _render_feed_status,
     render_generation_success as _render_generation_success,
     render_inspection_success as _render_inspection_success,
     render_runtime_error as _render_runtime_error,
@@ -41,7 +40,7 @@ from speekify.config import (
 from speekify.console import console
 from speekify.logging_utils import configure_logger
 from speekify.user_config import UserConfig, load_user_config
-from speekify.validation import normalize_feed_base_url, normalize_language_code, normalize_voice_name
+from speekify.validation import normalize_language_code, normalize_voice_name
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 PACKAGE_NAME = "speekify"
@@ -63,7 +62,6 @@ def _build_cli_epilog() -> str:
         "  speekify --doctor",
         "  speekify setup",
         "  speekify setup --help",
-        "  speekify feed rebuild --output-dir ./output",
         "",
         f"Supported languages: {', '.join(SUPPORTED_TTS_LANGUAGES)}",
         f"Use {UNKNOWN_TTS_LANGUAGE} for language-agnostic synthesis if needed.",
@@ -77,7 +75,6 @@ GENERATION_HELP = (
 )
 SETUP_HELP = "Download and warm up the models used by Speekify."
 INSPECT_HELP = "Preview extraction, translation, tagging, and output naming without synthesis."
-FEED_HELP = "Inspect or rebuild the local podcast RSS feed."
 
 
 def _parse_language_code(value: str) -> str:
@@ -90,13 +87,6 @@ def _parse_language_code(value: str) -> str:
 def _parse_voice_name(value: str) -> str:
     try:
         return normalize_voice_name(value)
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-
-
-def _parse_feed_base_url(value: str) -> str:
-    try:
-        return normalize_feed_base_url(value)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
@@ -188,18 +178,6 @@ OutputDirOption = Annotated[
     Path | None,
     typer.Option("--output-dir", help="Directory where the WAV file is written."),
 ]
-FeedBaseUrlOption = Annotated[
-    str,
-    typer.Option(
-        "--feed-base-url",
-        envvar="SPEEKIFY_FEED_BASE_URL",
-        callback=_parse_feed_base_url,
-        help=(
-            "Public http(s) directory URL for podcast enclosure URLs, for example "
-            "https://audio.example.com/speekify. Can also be set with SPEEKIFY_FEED_BASE_URL."
-        ),
-    ),
-]
 VerboseOption = Annotated[
     bool,
     typer.Option("--verbose", help="Show technical diagnostics such as log file paths."),
@@ -262,12 +240,6 @@ inspect_app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
-feed_app = typer.Typer(
-    add_completion=False,
-    context_settings=CONTEXT_SETTINGS,
-    no_args_is_help=True,
-    rich_markup_mode="rich",
-)
 
 
 @generation_app.command(help=GENERATION_HELP)
@@ -285,7 +257,6 @@ def generation_command(
     english_islands: EnglishIslandsOption = True,
     english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
-    feed_base_url: FeedBaseUrlOption = "",
     tags: TagsOption = True,
     tag_sentiment: TagSentimentOption = True,
     tag_sigh: TagSighOption = True,
@@ -307,7 +278,6 @@ def generation_command(
             english_islands=english_islands,
             english_lexicon_path=english_lexicon_path,
             output_dir=output_dir,
-            feed_base_url=feed_base_url,
             tags=tags,
             tag_sentiment=tag_sentiment,
             tag_sigh=tag_sigh,
@@ -327,7 +297,6 @@ def generation_command(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -350,7 +319,6 @@ def inspect_command(
     english_islands: EnglishIslandsOption = True,
     english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
-    feed_base_url: FeedBaseUrlOption = "",
     tags: TagsOption = True,
     tag_sentiment: TagSentimentOption = True,
     tag_sigh: TagSighOption = True,
@@ -370,7 +338,6 @@ def inspect_command(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -391,27 +358,6 @@ def setup_command(
     )
 
 
-@feed_app.command("rebuild", help="Rebuild speekify-feed.xml from JSON sidecars.")
-def feed_rebuild_command(
-    output_dir: OutputDirOption = None,
-    feed_base_url: FeedBaseUrlOption = "",
-    verbose: VerboseOption = False,
-) -> int:
-    return _run_feed_rebuild(
-        output_dir=output_dir,
-        feed_base_url=feed_base_url,
-        verbose=verbose,
-    )
-
-
-@feed_app.command("validate", help="Validate JSON sidecars and matching WAV files.")
-def feed_validate_command(
-    output_dir: OutputDirOption = None,
-    verbose: VerboseOption = False,
-) -> int:
-    return _run_feed_validate(output_dir=output_dir, verbose=verbose)
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) == 1 and argv[0] in {"--version", "-v"}:
@@ -423,8 +369,6 @@ def main(argv: list[str] | None = None) -> int:
         return _invoke_typer(setup_app, argv[1:], prog_name="speekify setup")
     if argv and argv[0] == "inspect":
         return _invoke_typer(inspect_app, argv[1:], prog_name="speekify inspect")
-    if argv and argv[0] == "feed":
-        return _invoke_typer(feed_app, argv[1:], prog_name="speekify feed")
     return _invoke_typer(generation_app, argv, prog_name="speekify")
 
 
@@ -461,7 +405,6 @@ def _run_generation(
     english_islands: bool,
     english_lexicon_path: Path | None,
     output_dir: Path | None,
-    feed_base_url: str,
     tags: bool,
     tag_sentiment: bool,
     tag_sigh: bool,
@@ -482,7 +425,6 @@ def _run_generation(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -533,7 +475,6 @@ def _run_inspection(
     english_islands: bool,
     english_lexicon_path: Path | None,
     output_dir: Path | None,
-    feed_base_url: str,
     tags: bool,
     tag_sentiment: bool,
     tag_sigh: bool,
@@ -554,7 +495,6 @@ def _run_inspection(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        feed_base_url=feed_base_url,
         tags=tags,
         tag_sentiment=tag_sentiment,
         tag_sigh=tag_sigh,
@@ -620,52 +560,6 @@ def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -
     return 0
 
 
-def _run_feed_rebuild(*, output_dir: Path | None, feed_base_url: str, verbose: bool) -> int:
-    options = _apply_user_config_options(output_dir=output_dir, feed_base_url=feed_base_url)
-    output_dir = options["output_dir"] or Path.cwd()
-    feed_base_url = options["feed_base_url"]
-    logger, log_path = configure_logger(verbose=verbose)
-    try:
-        from speekify.metadata import inspect_podcast_feed, rebuild_podcast_feed
-
-        feed_path = rebuild_podcast_feed(output_dir, feed_base_url=feed_base_url)
-        inspection = inspect_podcast_feed(output_dir)
-    except Exception as exc:
-        logger.exception("Feed rebuild failed")
-        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
-        return 1
-
-    _render_feed_status(
-        inspection,
-        title="Podcast feed rebuilt",
-        feed_path=feed_path,
-        log_path=log_path if verbose else None,
-    )
-    return 0 if inspection.ok else 1
-
-
-def _run_feed_validate(*, output_dir: Path | None, verbose: bool) -> int:
-    options = _apply_user_config_options(output_dir=output_dir)
-    output_dir = options["output_dir"] or Path.cwd()
-    logger, log_path = configure_logger(verbose=verbose)
-    try:
-        from speekify.metadata import inspect_podcast_feed
-
-        inspection = inspect_podcast_feed(output_dir)
-    except Exception as exc:
-        logger.exception("Feed validation failed")
-        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
-        return 1
-
-    _render_feed_status(
-        inspection,
-        title="Podcast feed valid" if inspection.ok else "Podcast feed needs attention",
-        feed_path=inspection.feed_path,
-        log_path=log_path if verbose else None,
-    )
-    return 0 if inspection.ok else 1
-
-
 def _load_user_config() -> UserConfig:
     return load_user_config()
 
@@ -683,7 +577,6 @@ def _apply_user_config_options(**options: Any) -> dict[str, Any]:
         "english_islands": user_config.english_islands,
         "english_lexicon_path": user_config.english_lexicon_path,
         "output_dir": user_config.output_dir,
-        "feed_base_url": user_config.feed_base_url,
         "tags": user_config.tags,
         "tag_sentiment": user_config.tag_sentiment,
         "tag_sigh": user_config.tag_sigh,
@@ -727,7 +620,6 @@ def _build_cli_request(
         english_islands=options["english_islands"],
         english_lexicon_path=options["english_lexicon_path"],
         output_dir=options["output_dir"] or Path.cwd(),
-        feed_base_url=options["feed_base_url"],
         tags=options["tags"],
         tag_sentiment=options["tag_sentiment"],
         tag_sigh=options["tag_sigh"],

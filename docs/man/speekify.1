@@ -25,13 +25,6 @@ speekify \- convert inline text, stdin, a local text/PDF file, or readable URL c
 .I SOURCE ...
 ]
 .PP
-.B speekify
-.B feed
-.B rebuild|validate
-[
-.I OPTIONS
-]
-.PP
 .B speekify-mcp
 [
 .I OPTIONS
@@ -67,11 +60,6 @@ Use
 or
 .B speekify --dry-run
 to preview extraction, translation, speech tags, and planned output paths without running synthesis.
-Use
-.B speekify feed rebuild
-and
-.B speekify feed validate
-to manage the local podcast RSS feed created from JSON sidecars.
 .PP
 Use
 .B speekify-mcp
@@ -119,9 +107,6 @@ Use a newline-delimited file of extra English terms for French synthesis.
 .B --output-dir
 Write the generated WAV file into a specific directory.
 .TP
-.B --feed-base-url
-Set the public HTTP(S) directory URL used for RSS enclosure URLs.
-.TP
 .B --dry-run
 Inspect the generation plan without creating audio.
 .TP
@@ -166,21 +151,10 @@ Show technical diagnostics such as the log file path.
 .TP
 .B --help
 Show setup help and exit.
-.SH INSPECT AND FEED OPTIONS
+.SH INSPECT OPTIONS
 .TP
 .B speekify inspect
 Accepts the same source, URL, language, voice, chunking, tagging, and output options as the main generation command, but does not synthesize or write a WAV file.
-.TP
-.B speekify feed rebuild --output-dir DIR
-Rebuild
-.I speekify-feed.xml
-from JSON sidecars in the output directory.
-.TP
-.B speekify feed validate --output-dir DIR
-Validate feed inputs by checking JSON sidecars and referenced WAV files.
-.TP
-.B --feed-base-url
-Override the public enclosure base URL while rebuilding the feed.
 .SH MCP SERVER
 The
 .B speekify-mcp
@@ -192,7 +166,7 @@ for supported voices and language defaults, and a
 .B news_recap_to_audio
 prompt for source-summary-to-audio automations.
 .PP
-The generation tool accepts CLI-equivalent controls including feed base URL, English-island handling, custom English lexicon path, and optional user-config defaults.
+The generation tool accepts CLI-equivalent controls including English-island handling, custom English lexicon path, and optional user-config defaults.
 .TP
 .B --transport
 Select the MCP transport, either stdio or streamable-http.
@@ -224,12 +198,6 @@ Preview URL extraction and planned audio paths without synthesis.
 .B speekify inspect "Hello world"
 Inspect inline text generation without creating a WAV file.
 .TP
-.B speekify feed rebuild --output-dir ~/Speekify/audio
-Rebuild the RSS feed from existing JSON sidecars.
-.TP
-.B speekify feed validate --output-dir ~/Speekify/audio
-Validate sidecars and audio references for the feed.
-.TP
 .B speekify setup
 Download and warm the local AI models.
 .TP
@@ -247,9 +215,6 @@ Runtime log file maintained automatically by the CLI.
 Optional TOML file for generation defaults. Set
 .B SPEEKIFY_CONFIG
 to use another config path. Explicit CLI options override config values.
-.TP
-.I speekify-feed.xml
-Podcast-style RSS feed refreshed in each output directory.
 .SH EXIT STATUS
 The command exits with status 0 on success and non-zero on failure. The
 .B --doctor

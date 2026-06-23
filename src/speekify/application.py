@@ -22,7 +22,6 @@ from speekify.dependencies import (
 from speekify.tagging import TaggingConfig
 from speekify.user_config import UserConfig, config_value, load_user_config
 from speekify.validation import (
-    normalize_feed_base_url,
     normalize_language_code,
     normalize_source_text,
     normalize_voice_name,
@@ -66,7 +65,6 @@ def build_generation_request(
     english_islands: bool,
     english_lexicon_path: str | Path | None,
     output_dir: str | Path | None,
-    feed_base_url: str,
     tags: bool,
     tag_sentiment: bool,
     tag_sigh: bool,
@@ -91,7 +89,6 @@ def build_generation_request(
         user_config.english_lexicon_path,
     )
     output_dir = config_value(output_dir, None, user_config.output_dir)
-    feed_base_url = config_value(feed_base_url, "", user_config.feed_base_url)
     tags = config_value(tags, True, user_config.tags)
     tag_sentiment = config_value(tag_sentiment, True, user_config.tag_sentiment)
     tag_sigh = config_value(tag_sigh, True, user_config.tag_sigh)
@@ -110,7 +107,6 @@ def build_generation_request(
         title=title.strip(),
         is_url_mode=is_url_mode,
         output_dir=_expand_path(output_dir) or Path.cwd(),
-        feed_base_url=normalize_feed_base_url(feed_base_url),
         tagging_config=build_tagging_config(
             enabled=tags,
             use_sentiment=tag_sentiment,

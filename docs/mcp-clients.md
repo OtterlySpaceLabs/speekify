@@ -345,7 +345,7 @@ After connecting Speekify in any supported client, ask the assistant to call `sp
 }
 ```
 
-If the tool succeeds, it should return an `output_path`, an `output_uri`, and generation metadata.
+If the tool succeeds, it should return an `output_path`, an `output_uri`, and generation details (duration, title, warnings, and log path).
 
 ## Troubleshooting
 

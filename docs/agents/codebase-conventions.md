@@ -5,6 +5,6 @@
 - When adding a generation status, update both the status callbacks in `workflow.py` and the display label map in `cli_rendering.format_status()`.
 - French synthesis has a special behavior: when `target_language == "fr"`, `workflow.translate_content_if_needed()` calls `HuggingFaceTranslator.maybe_translate_to_french()` and only English input is translated.
 - `SupertonicSynthesizer.prepare_text()` is intentionally permissive: it preprocesses via Supertonic, removes unsupported characters when possible, and reports cleanup through `PreparedText.summary_notes()`.
-- Output files should continue to be `.wav` files named by `build_output_path()`, using a slug plus timestamp and collision suffixes. After saving audio, keep `metadata.py` sidecar and feed generation in sync so every WAV has a parallel `.json` and the output directory has a refreshed `speekify-feed.xml`; when adding feed URL features, preserve local `file://` defaults and support public HTTP(S) `--feed-base-url` use for synced/static hosting.
+- Output files should continue to be `.wav` files named by `build_output_path()`, using a slug plus timestamp and collision suffixes.
 - User-facing terminal output should stay concise Rich panels/tables; technical diagnostics belong in `logs/speekify.log` and are shown to users only with `--verbose`.
 - URL extraction should return readable body text, not raw HTML; provider-specific extraction belongs under `extractors/`, while `extract.py` stays a small facade.

@@ -62,7 +62,6 @@ def test_build_generation_request_normalizes_without_user_config(tmp_path) -> No
         english_islands=False,
         english_lexicon_path=str(tmp_path / "english.txt"),
         output_dir=str(tmp_path),
-        feed_base_url="https://audio.example.com/speekify/",
         tags=True,
         tag_sentiment=False,
         tag_sigh=True,
@@ -74,7 +73,6 @@ def test_build_generation_request_normalizes_without_user_config(tmp_path) -> No
     assert request.voice == "M1"
     assert request.language_code == "fr"
     assert request.output_dir == tmp_path
-    assert request.feed_base_url == "https://audio.example.com/speekify"
     assert request.tagging_config.enabled is True
     assert request.tagging_config.use_sentiment is False
     assert request.tagging_config.enable_sigh is True
@@ -120,7 +118,6 @@ def test_run_generation_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
         english_islands=True,
         english_lexicon_path=None,
         output_dir=str(tmp_path),
-        feed_base_url="",
         tags=True,
         tag_sentiment=True,
         tag_sigh=True,
@@ -159,7 +156,6 @@ def test_run_inspection_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
     captured: dict[str, object] = {}
     expected_result = GenerationInspection(
         output_path=tmp_path / "preview.wav",
-        feed_path=tmp_path / "speekify-feed.xml",
         title="Preview",
         content=ExtractedContent(text="Bonjour"),
         prepared_text=PreparedText(
@@ -193,7 +189,6 @@ def test_run_inspection_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
         english_islands=True,
         english_lexicon_path=None,
         output_dir=str(tmp_path),
-        feed_base_url="",
         tags=True,
         tag_sentiment=False,
         tag_sigh=False,
