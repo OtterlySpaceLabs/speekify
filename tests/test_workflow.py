@@ -136,6 +136,67 @@ def test_resolve_content_autodetects_single_url_input(monkeypatch) -> None:
     assert statuses == ["extracting URL", "checking language"]
 
 
+def test_resolve_content_reads_text_file(tmp_path) -> None:
+    doc = tmp_path / "Mon Article.txt"
+    doc.write_text("Bonjour depuis un fichier.\n", encoding="utf-8")
+    statuses: list[str] = []
+
+    content = asyncio.run(
+        resolve_content(
+            str(doc),
+            is_url_mode=False,
+            target_language="fr",
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+            status_callback=statuses.append,
+        )
+    )
+
+    assert content == ExtractedContent(text="Bonjour depuis un fichier.", title="Mon Article")
+    assert statuses == ["reading file", "checking language"]
+
+
+def test_resolve_content_reads_pdf_file(tmp_path) -> None:
+    from speekify.extract_common import read_document
+
+    pdf = tmp_path / "rapport.pdf"
+    pdf.write_bytes(_minimal_pdf_bytes("Texte du PDF."))
+
+    content = read_document(pdf)
+
+    assert "Texte du PDF." in content.text
+    assert content.title == "rapport"
+
+
+def _minimal_pdf_bytes(text: str) -> bytes:
+    # Hand-built single-page PDF with a real text-showing content stream so the
+    # pypdf reader path is exercised end to end (no reportlab dependency).
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+        b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\nBT /F1 12 Tf 10 100 Td (%s) Tj ET\nendstream"
+        % (len(text) + 28, text.encode("latin-1")),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + body + b"\nendobj\n"
+    xref_pos = len(out)
+    out += b"xref\n0 %d\n" % (len(objects) + 1)
+    out += b"0000000000 65535 f \n"
+    for off in offsets:
+        out += b"%010d 00000 n \n" % off
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF" % (
+        len(objects) + 1,
+        xref_pos,
+    )
+    return bytes(out)
+
+
 def test_resolve_content_translates_english_text_to_french() -> None:
     translator = FrenchTranslator()
     statuses: list[str] = []

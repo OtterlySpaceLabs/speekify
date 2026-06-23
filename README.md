@@ -1,6 +1,6 @@
 # Speekify
 
-Speekify turns CLI text, stdin, YouTube video transcripts, X/Twitter posts, or the readable content of a URL into a local WAV file generated with Supertonic v3.
+Speekify turns CLI text, stdin, local `.txt`/`.md`/`.pdf` files, YouTube video transcripts, X/Twitter posts, or the readable content of a URL into a local WAV file generated with Supertonic v3.
 
 ## Install
 
@@ -38,11 +38,12 @@ If you skip setup, the models can still download automatically on first use.
 
 ## Run
 
-Speekify is a CLI. Provide inline text, a URL, or piped stdin. URL mode supports readable articles, YouTube video transcripts (English captions/transcripts when available), and public X/Twitter post text (via the public oEmbed endpoint). X articles (`x.com/<user>/article/...`), protected posts, and very short posts cannot be extracted without a logged-in session and fail with a clear error instead:
+Speekify is a CLI. Provide inline text, a URL, a path to a local `.txt`/`.md`/`.pdf` file, or piped stdin. A source that points at an existing `.txt`, `.md`, `.text`, or `.pdf` file is read automatically (PDF text is extracted with `pypdf`), and the file name becomes the default output title. URL mode supports readable articles, YouTube video transcripts (English captions/transcripts when available), and public X/Twitter post text (via the public oEmbed endpoint). X articles (`x.com/<user>/article/...`), protected posts, and very short posts cannot be extracted without a logged-in session and fail with a clear error instead:
 
 ```bash
 speekify "Hello world"
 speekify https://example.com/article
+speekify ~/Documents/article.pdf
 speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"
 speekify --lang fr https://x.com/w1nklerr/status/2060057563991884060
 printf 'Hello from stdin' | speekify
@@ -63,6 +64,10 @@ uv run speekify "Hello world"
 
 speekify --lang fr "Hello world"
 uv run speekify --lang fr "Hello world"
+
+# Generate from a local text or PDF file (auto-detected by extension)
+speekify ~/Documents/article.pdf
+uv run speekify ~/Documents/notes.txt
 
 # Generate from a URL (auto-detected or forced)
 speekify https://example.com/article
@@ -178,7 +183,7 @@ english_islands = true
 
 | Option | Default | Description |
 |---|---|---|
-| `source` | *(stdin if piped)* | Text to synthesize or a URL to extract. Required unless stdin is piped. |
+| `source` | *(stdin if piped)* | Text to synthesize, a URL to extract, or a path to a local `.txt`/`.md`/`.text`/`.pdf` file. Required unless stdin is piped. |
 | `--lang CODE` | `fr` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, and more. Use `na` for language-agnostic synthesis. |
 | `--voice NAME` | `M5` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
 | `--custom-style-path PATH` | — | Load a Supertonic voice-style JSON file, such as a Voice Builder export. Overrides `--voice`. |
@@ -252,7 +257,7 @@ stream episodes.
 
 Speekify also ships a local Model Context Protocol (MCP) server so AI assistants can call Speekify as a tool during automations. The server exposes:
 
-- `speekify_generate_wav`: convert inline text or readable URL content to a local WAV file and return structured metadata (`output_path`, `output_uri`, sidecar/feed paths, duration, title, warnings, and log path). It accepts the same generation controls as the CLI, including `feed_base_url`, `english_islands`, `english_lexicon_path`, and `use_user_config`.
+- `speekify_generate_wav`: convert inline text, readable URL content, or a local `.txt`/`.md`/`.pdf` file (pass the file path as `source`) to a local WAV file and return structured metadata (`output_path`, `output_uri`, sidecar/feed paths, duration, title, warnings, and log path). It accepts the same generation controls as the CLI, including `feed_base_url`, `english_islands`, `english_lexicon_path`, and `use_user_config`.
 - `speekify_generation_defaults`: inspect supported voices, languages, and generation ranges before calling the generator.
 - `news_recap_to_audio`: a prompt template for the common workflow “check news sources, summarize them, then generate WAV files for each URL and for the final recap.”
 
@@ -310,6 +315,7 @@ The GitHub Actions workflow in `.github/workflows/release.yml` automates the sam
 - URL mode extracts readable body text rather than raw HTML.
 - X/Twitter extraction only works for public posts exposed through the public oEmbed endpoint. X articles, protected accounts, and posts whose text is too short are reported as extraction errors because they would require a logged-in session.
 - A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.
+- A source that resolves to an existing `.txt`, `.md`, `.text`, or `.pdf` file is read automatically; the file name becomes the default title. PDF text is extracted with `pypdf` (text-based PDFs only — scanned/image PDFs with no text layer yield nothing). `--url` skips file detection.
 - Input text is cleaned permissively before synthesis: Supertonic preprocessing is reused, unsupported characters are removed automatically, and the CLI summarizes the cleanup after generation.
 - Supertonic handles normal long-text chunking internally. Very large inputs above the SDK text limit are split into external batches automatically and merged into one final WAV file.
 - The steps control follows the SDK range `1..100`, with `10` as the default.

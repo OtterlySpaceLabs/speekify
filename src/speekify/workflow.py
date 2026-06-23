@@ -15,6 +15,7 @@ from speekify.config import (
     MIN_STEPS,
 )
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
+from speekify.extract_common import is_document_path_input, read_document
 from speekify.metadata import GenerationMetadataRequest, write_generation_metadata
 from speekify.naming import build_output_path
 from speekify.tagging import SupertoneTagger, TaggingConfig
@@ -93,6 +94,18 @@ async def resolve_content(
         )
         return await translate_content_if_needed(
             extracted,
+            target_language=target_language,
+            translator=translator,
+            logger=logger,
+            status_callback=status_callback,
+        )
+
+    if not is_url_mode and is_document_path_input(raw_input):
+        _update_status(status_callback, "reading file")
+        content = await asyncio.to_thread(read_document, Path(raw_input.strip()))
+        logger.info("File read path=%s text_length=%s", raw_input.strip(), len(content.text))
+        return await translate_content_if_needed(
+            content,
             target_language=target_language,
             translator=translator,
             logger=logger,
@@ -343,11 +356,19 @@ async def inspect_generation(
         title=output_title,
         content=content,
         prepared_text=prepared_text,
-        source_mode="url" if request.is_url_mode or is_single_url_input(request.source_text) else "text",
+        source_mode=_source_mode(request),
         tag_counts=tag_counts,
         sentiment_used=sentiment_used,
         english_lexicon_terms=len(english_lexicon_terms or ()),
     )
+
+
+def _source_mode(request: GenerationRequest) -> str:
+    if request.is_url_mode or is_single_url_input(request.source_text):
+        return "url"
+    if is_document_path_input(request.source_text):
+        return "file"
+    return "text"
 
 
 def _validate_generation_request(request: GenerationRequest) -> None:

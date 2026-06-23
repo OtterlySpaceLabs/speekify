@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 from speekify.logging_utils import LOGGER_NAME
@@ -64,3 +65,40 @@ def is_single_url_input(text: str) -> bool:
         return False
 
     return True
+
+
+DOCUMENT_SUFFIXES = {".txt", ".md", ".text", ".pdf"}
+
+
+def is_document_path_input(text: str) -> bool:
+    candidate = text.strip()
+    if not candidate or "\n" in candidate:
+        return False
+    try:
+        path = Path(candidate).expanduser()
+    except (OSError, ValueError):
+        return False
+    return path.suffix.lower() in DOCUMENT_SUFFIXES and path.is_file()
+
+
+def read_document(path: Path) -> ExtractedContent:
+    path = path.expanduser()
+    if path.suffix.lower() == ".pdf":
+        text = _read_pdf_text(path)
+    else:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    normalized = normalize_text(text)
+    if not normalized:
+        raise ValueError(f"Aucun texte lisible trouvé dans le fichier : {path}")
+    return ExtractedContent(text=normalized, title=path.stem)
+
+
+def _read_pdf_text(path: Path) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:  # pragma: no cover - depends on optional install
+        raise ValueError(
+            "La lecture de PDF nécessite le paquet 'pypdf' (pip install pypdf)."
+        ) from exc
+    reader = PdfReader(str(path))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)

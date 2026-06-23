@@ -2,7 +2,7 @@
 
 ## Goal
 
-Speekify is a Python CLI that converts inline text, piped stdin, or readable URL content into a local WAV file generated with Supertonic v3.
+Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/`.md`/`.pdf` file, or readable URL content into a local WAV file generated with Supertonic v3.
 
 ## Architecture
 
@@ -43,6 +43,7 @@ Speekify is a Python CLI that converts inline text, piped stdin, or readable URL
 - X/Twitter extraction uses the public oEmbed endpoint only; X articles and protected or very short posts fail with a clear error instead of falling back to the JavaScript-required x.com HTML page.
 - `--english-islands` (default on) pronounces known English tech terms as English islands during French synthesis; `--english-lexicon-path` extends the lexicon.
 - A single URL source is auto-detected; `--url` can force URL extraction mode.
+- A source resolving to an existing `.txt`/`.md`/`.text`/`.pdf` file is read automatically (PDF text via `pypdf`) and the file name becomes the default title; `--url` skips file detection.
 - `--dry-run` and `speekify inspect` preview extraction, translation, tagging, and planned output paths without synthesis.
 - `speekify feed rebuild` rebuilds the RSS feed from JSON sidecars; `speekify feed validate` checks sidecars and referenced WAV files.
 - MCP generation exposes CLI-equivalent generation controls including English-island options and optional user-config defaults.

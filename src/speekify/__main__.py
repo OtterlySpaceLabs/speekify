@@ -72,7 +72,8 @@ def _build_cli_epilog() -> str:
 
 
 GENERATION_HELP = (
-    "Generate a local WAV file from text, stdin, or a readable URL.\n\n" + _build_cli_epilog()
+    "Generate a local WAV file from text, stdin, a readable URL, or a .txt/.md/.pdf file.\n\n"
+    + _build_cli_epilog()
 )
 SETUP_HELP = "Download and warm up the models used by Speekify."
 INSPECT_HELP = "Preview extraction, translation, tagging, and output naming without synthesis."
@@ -104,7 +105,7 @@ SourceArgument = Annotated[
     list[str] | None,
     typer.Argument(
         metavar="SOURCE...",
-        help="Text to synthesize or a single URL to extract. Omit only when using stdin.",
+        help="Text, a single URL, or a path to a .txt/.md/.pdf file. Omit only when using stdin.",
         show_default=False,
     ),
 ]

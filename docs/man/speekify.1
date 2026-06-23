@@ -1,6 +1,6 @@
 .TH SPEEKIFY 1 "May 2026" "Speekify" "User Commands"
 .SH NAME
-speekify \- convert inline text, stdin, or readable URL content into a local WAV file
+speekify \- convert inline text, stdin, a local text/PDF file, or readable URL content into a local WAV file
 .SH SYNOPSIS
 .B speekify
 [
@@ -37,9 +37,13 @@ speekify \- convert inline text, stdin, or readable URL content into a local WAV
 .I OPTIONS
 ]
 .SH DESCRIPTION
-Speekify is a Python CLI that turns inline text, piped stdin, or the readable body of a URL into a local WAV file generated with Supertonic v3.
+Speekify is a Python CLI that turns inline text, piped stdin, a local text/PDF file, or the readable body of a URL into a local WAV file generated with Supertonic v3.
 .PP
-The default workflow accepts plain text, piped text, or a single URL. URL input is reduced to readable article content before synthesis. English input can be translated to French before text to speech, and sparse speech tags can be added before generation.
+The default workflow accepts plain text, piped text, a single URL, or a path to a local
+.B .txt , .md , .text ,
+or
+.B .pdf
+file. URL input is reduced to readable article content before synthesis. A file source is read automatically (PDF text is extracted with pypdf) and its name becomes the default output title. English input can be translated to French before text to speech, and sparse speech tags can be added before generation.
 .PP
 When passing a URL that contains shell-special characters such as
 .B ?
@@ -75,7 +79,7 @@ to expose Speekify as a local Model Context Protocol server for AI assistants th
 .SH ARGUMENTS
 .TP
 .I SOURCE
-Text to synthesize or a single URL to extract. Omit it only when text is piped on stdin.
+Text to synthesize, a single URL to extract, or a path to a local .txt/.md/.text/.pdf file to read. Omit it only when text is piped on stdin.
 .SH MAIN OPTIONS
 .TP
 .B --url
@@ -182,7 +186,7 @@ The
 .B speekify-mcp
 entry point runs an MCP server over stdio by default. It exposes the
 .B speekify_generate_wav
-tool for converting inline text or readable URL content into a WAV file,
+tool for converting inline text, readable URL content, or a local .txt/.md/.pdf file into a WAV file,
 .B speekify_generation_defaults
 for supported voices and language defaults, and a
 .B news_recap_to_audio

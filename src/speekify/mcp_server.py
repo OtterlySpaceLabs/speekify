@@ -188,7 +188,7 @@ def create_mcp_server() -> Any:
         tag_sigh: bool = True,
         use_user_config: bool = True,
     ) -> dict[str, object]:
-        """Convert inline text or readable URL content to a local WAV file."""
+        """Convert inline text, readable URL content, or a .txt/.md/.pdf file to a local WAV file."""
         return await generate_wav(
             source,
             is_url_mode=is_url_mode,
