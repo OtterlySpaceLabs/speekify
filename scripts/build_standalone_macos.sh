@@ -8,9 +8,13 @@ arch="$(uname -m)"
 archive_name="speekify-macos-${arch}.tar.gz"
 
 uv sync --group dev
+# ponytail: --onedir (not --onefile) so launch doesn't re-extract the whole
+# torch/transformers bundle to a temp dir on every run; --noupx avoids
+# per-launch UPX decompression. Onefile turned `speekify -v` into a 13-20s wait.
 uv run pyinstaller \
   --name speekify \
-  --onefile \
+  --onedir \
+  --noupx \
   --clean \
   --noconfirm \
   --paths src \
@@ -23,7 +27,8 @@ uv run pyinstaller \
   src/speekify/__main__.py
 
 mkdir -p dist/release
-cp dist/speekify dist/release/speekify
+# onedir produces dist/speekify/ (exe + _internal/), copy the whole folder.
+cp -R dist/speekify dist/release/speekify
 mkdir -p dist/release/share/man/man1
 cp docs/man/speekify.1 dist/release/share/man/man1/speekify.1
 tar -C dist/release -czf "dist/${archive_name}" speekify share
