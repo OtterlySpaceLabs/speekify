@@ -37,9 +37,6 @@ uv run speekify https://example.com/article
 speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"
 uv run speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"
 
-speekify --lang fr "https://x.com/w1nklerr/status/2060057563991884060"
-uv run speekify --lang fr "https://x.com/w1nklerr/status/2060057563991884060"
-
 speekify --url https://example.com/article
 uv run speekify --url https://example.com/article
 

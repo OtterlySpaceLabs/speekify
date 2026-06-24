@@ -1,15 +1,14 @@
 # Speekify
 
 Speekify turns text into a local WAV file you can listen to — from inline CLI
-text, stdin, local `.txt`/`.md`/`.pdf` files, YouTube transcripts, X/Twitter
-posts, or the readable content of a URL. Audio is generated locally with
-Supertonic v3.
+text, stdin, local `.txt`/`.md`/`.pdf` files, YouTube transcripts, or the
+readable content of a URL. Audio is generated locally with Supertonic v3.
 
 ## Features
 
 | Capability | What you get |
 |---|---|
-| **Many input sources** | Inline text, piped stdin, local `.txt`/`.md`/`.pdf` files, readable URLs, YouTube transcripts, and public X/Twitter posts — auto-detected. |
+| **Many input sources** | Inline text, piped stdin, local `.txt`/`.md`/`.pdf` files, readable URLs, and YouTube transcripts — auto-detected. |
 | **Local TTS** | WAV files synthesized on your machine with Supertonic v3 — no audio leaves your computer. |
 | **Multilingual** | `en`, `fr`, `de`, `es`, `it`, `pt`, `ja`, `ko`, and more, plus `na` for language-agnostic synthesis. |
 | **Auto-translation** | English input is detected and translated to French before TTS when synthesizing in French (the default). |
@@ -115,7 +114,7 @@ Per-client setup (Claude Code, GitHub Copilot, Codex, OpenAI remote MCP):
 
 Speekify only fetches content you explicitly point it at, for your own personal
 use. You are responsible for respecting the terms of service and copyright of any
-source you extract from, including YouTube transcripts and X/Twitter posts. The
+source you extract from, including YouTube transcripts. The
 maintainers provide no rights over third-party content.
 
 ## License

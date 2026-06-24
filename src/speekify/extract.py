@@ -16,9 +16,7 @@ from speekify.extractors import (
     extract_from_html,
     extract_medium_article_from_feed,
     extract_medium_article_from_graphql,
-    extract_x_status_from_oembed,
     extract_youtube_transcript,
-    looks_like_x_status_url,
     looks_like_youtube_url,
     should_retry_with_medium_feed,
 )
@@ -30,23 +28,6 @@ async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> Extract
     should_attempt_medium_fallback = False
     direct_error: httpx.HTTPError | None = None
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-        if looks_like_x_status_url(validated_url):
-            extracted = await extract_x_status_from_oembed(
-                client,
-                validated_url,
-                min_chars=min_chars,
-            )
-            if extracted is not None:
-                return extracted
-            # x.com serves a JavaScript-required error page to plain HTTP clients,
-            # so falling back to generic HTML extraction can only synthesize that
-            # error page. Fail clearly instead.
-            raise ValueError(
-                "Impossible d'extraire le texte de ce post X. Les articles X et les"
-                " posts protégés ou très courts nécessitent une session connectée,"
-                " qui n'est pas prise en charge."
-            )
-
         try:
             response = await client.get(validated_url, headers=DEFAULT_FETCH_HEADERS)
             response.raise_for_status()

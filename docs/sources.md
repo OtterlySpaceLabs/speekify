@@ -16,21 +16,10 @@ source, and auto-detects which one you gave it.
 | `.pdf` file | Source resolves to an existing `.pdf` | Text extracted with `pypdf`. Text-based PDFs only — scanned/image PDFs with no text layer yield nothing. |
 | Readable URL | Source looks like a URL, or `--url` forces it | Extracts readable body text, not raw HTML. |
 | YouTube video | URL is a YouTube watch link | Uses English captions/transcripts when available. |
-| X/Twitter post | URL is a public `x.com` status | Public post text via the public oEmbed endpoint. |
 
 A source that resolves to an existing file is read automatically. `--url` skips
 file detection and forces URL extraction even when the source looks like plain
 text.
-
-### URL extraction limits
-
-X/Twitter extraction only works for public posts exposed through the public
-oEmbed endpoint. The following are reported as extraction errors (they would
-require a logged-in session) instead of failing silently:
-
-- X articles (`x.com/<user>/article/...`)
-- Protected accounts
-- Posts whose text is too short
 
 ## Language and translation
 
