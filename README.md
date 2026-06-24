@@ -263,3 +263,11 @@ Releases are built and published entirely locally — there is no GitHub Actions
 - The steps control follows the SDK range `1..100`, with `10` as the default.
 - If generation fails, the terminal shows a short user-focused error. Add `--verbose` to include the technical log path (`logs/speekify.log`).
 - Each CLI run maintains `logs/speekify.log` automatically and prunes log entries older than 14 days at startup.
+
+## Usage and content
+
+Speekify only fetches content you explicitly point it at, for your own personal use. You are responsible for respecting the terms of service and copyright of any source you extract from, including YouTube transcripts and X/Twitter posts. The maintainers provide no rights over third-party content.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright © 2026 Otterly Space SARL.
