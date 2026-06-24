@@ -55,6 +55,7 @@ def _build_cli_epilog() -> str:
         '  speekify --dry-run "Hello world"',
         '  speekify inspect "Hello world"',
         "  printf 'Hello from stdin' | speekify",
+        "  speekify mcp",
         "",
         "Maintenance:",
         "  speekify --version",
@@ -369,6 +370,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if len(argv) == 1 and argv[0] == "--doctor":
         return _run_doctor()
+    if argv and argv[0] == "mcp":
+        from speekify.mcp_server import main as _mcp_main
+
+        return _mcp_main(argv[1:])
     if argv and argv[0] == "setup":
         return _invoke_typer(setup_app, argv[1:], prog_name="speekify setup")
     if argv and argv[0] == "inspect":

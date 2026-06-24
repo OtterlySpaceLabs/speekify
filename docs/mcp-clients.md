@@ -1,6 +1,11 @@
 # Speekify MCP Client Setup
 
-Speekify ships an MCP server entry point named `speekify-mcp` so AI clients can generate local WAV files from inline text or readable URLs.
+Speekify ships an MCP server so AI clients can generate local WAV files from inline text or readable URLs. Start it with the `mcp` subcommand:
+
+- `speekify mcp` — any installed binary (Homebrew, pip, or uv).
+- `uv run speekify mcp` — from a source checkout.
+
+Add `--transport streamable-http` for clients that need an HTTP endpoint instead of `stdio`.
 
 ## What Speekify exposes
 
@@ -11,8 +16,8 @@ Speekify ships an MCP server entry point named `speekify-mcp` so AI clients can 
 ## Prerequisites
 
 - Install the project dependencies with `uv sync --group dev` when working from source.
-- Verify the MCP server starts locally with `uv run speekify-mcp`.
-- Use `speekify-mcp` directly if Speekify is already installed as a package.
+- Verify the MCP server starts locally with `uv run speekify mcp`.
+- Use `speekify mcp` directly once Speekify is installed on your `PATH`.
 
 By default Speekify uses the `stdio` transport, which is the correct choice for local desktop clients. Use `--transport streamable-http` only for clients that require a remote or HTTP MCP endpoint.
 
@@ -38,13 +43,13 @@ Claude Code supports both local `stdio` servers and remote HTTP MCP servers. For
 Add Speekify from the repository root:
 
 ```bash
-claude mcp add --transport stdio speekify -- uv run speekify-mcp
+claude mcp add --transport stdio speekify -- uv run speekify mcp
 ```
 
-If Speekify is installed globally:
+If Speekify is installed globally (Homebrew/standalone binary):
 
 ```bash
-claude mcp add --transport stdio speekify -- speekify-mcp
+claude mcp add --transport stdio speekify -- speekify mcp
 ```
 
 Useful follow-ups:
@@ -63,7 +68,7 @@ Project-scoped JSON example:
   "mcpServers": {
     "speekify": {
       "command": "uv",
-      "args": ["run", "speekify-mcp"]
+      "args": ["run", "speekify", "mcp"]
     }
   }
 }
@@ -82,19 +87,20 @@ GitHub Copilot in VS Code supports MCP servers through `.vscode/mcp.json` or you
   "servers": {
     "speekify": {
       "command": "uv",
-      "args": ["run", "speekify-mcp"]
+      "args": ["run", "speekify", "mcp"]
     }
   }
 }
 ```
 
-If `speekify-mcp` is on your `PATH`, you can use:
+If Speekify is installed on your `PATH` (Homebrew, pip, or uv), you can skip `uv run`:
 
 ```json
 {
   "servers": {
     "speekify": {
-      "command": "speekify-mcp"
+      "command": "speekify",
+      "args": ["mcp"]
     }
   }
 }
@@ -116,13 +122,13 @@ Codex supports both local `stdio` servers and remote streamable HTTP servers. Fo
 CLI setup:
 
 ```bash
-codex mcp add speekify -- uv run speekify-mcp
+codex mcp add speekify -- uv run speekify mcp
 ```
 
-If Speekify is installed globally:
+If Speekify is installed globally (Homebrew/standalone binary):
 
 ```bash
-codex mcp add speekify -- speekify-mcp
+codex mcp add speekify -- speekify mcp
 ```
 
 You can also configure Codex explicitly in `.codex/config.toml` or `~/.codex/config.toml`:
@@ -130,7 +136,7 @@ You can also configure Codex explicitly in `.codex/config.toml` or `~/.codex/con
 ```toml
 [mcp_servers.speekify]
 command = "uv"
-args = ["run", "speekify-mcp"]
+args = ["run", "speekify", "mcp"]
 ```
 
 In the Codex TUI, use `/mcp` to inspect active servers.
@@ -151,7 +157,7 @@ You have two viable options:
 For local experiments, Speekify can start in HTTP mode with:
 
 ```bash
-uv run speekify-mcp --transport streamable-http
+uv run speekify mcp --transport streamable-http
 ```
 
 Once that server is reachable through a stable URL, you can connect it from OpenAI tooling that supports remote MCP by pointing the MCP tool at that URL. At the API level, the integration shape is a remote MCP server passed as an `mcp` tool with a `server_url`.
@@ -161,7 +167,7 @@ Once that server is reachable through a stable URL, you can connect it from Open
 Run Speekify in HTTP mode on a host that OpenAI products can reach:
 
 ```bash
-uv run speekify-mcp --transport streamable-http
+uv run speekify mcp --transport streamable-http
 ```
 
 With the current FastMCP defaults used by Speekify, that exposes the MCP endpoint on `http://127.0.0.1:8000/mcp`.
@@ -250,7 +256,7 @@ tunnel-client init \
   --sample sample_mcp_stdio_local \
   --profile speekify-local \
   --tunnel-id tunnel_0123456789abcdef0123456789abcdef \
-  --mcp-command "uv run speekify-mcp"
+  --mcp-command "uv run speekify mcp"
 
 tunnel-client doctor --profile speekify-local --explain
 tunnel-client run --profile speekify-local
@@ -281,7 +287,7 @@ Use this path when you want ChatGPT to reach a private Speekify server through O
 For a local HTTP target, run:
 
 ```bash
-uv run speekify-mcp --transport streamable-http
+uv run speekify mcp --transport streamable-http
 ```
 
 2. In OpenAI Platform, open tunnel settings and create a tunnel. Copy the resulting `tunnel_id`.
@@ -351,15 +357,15 @@ If the tool succeeds, it should return an `output_path`, an `output_uri`, and ge
 
 ### Common checks for any MCP client
 
-- Verify the server starts locally with `uv run speekify-mcp` for `stdio` clients.
-- Verify HTTP mode is reachable with `uv run speekify-mcp --transport streamable-http`, which exposes `http://127.0.0.1:8000/mcp` by default.
+- Verify the server starts locally with `uv run speekify mcp` for `stdio` clients.
+- Verify HTTP mode is reachable with `uv run speekify mcp --transport streamable-http`, which exposes `http://127.0.0.1:8000/mcp` by default.
 - Call `speekify_generation_defaults` before `speekify_generate_wav` to confirm tool discovery works before testing audio generation.
 - If a client discovers the server but tool calls hang, increase client-side tool timeouts because audio generation is slower than simple text tools.
 
 ### Claude Code
 
 - Symptom: `claude mcp list` does not show `speekify`.
-  Check that the command was added with `claude mcp add --transport stdio speekify -- uv run speekify-mcp` and that you are in the same project scope you used during setup.
+  Check that the command was added with `claude mcp add --transport stdio speekify -- uv run speekify mcp` and that you are in the same project scope you used during setup.
 - Symptom: the server appears as pending or rejected.
   Open Claude Code interactively and approve the project-scoped `.mcp.json` entry.
 - Symptom: tool calls fail immediately.
@@ -377,7 +383,7 @@ If the tool succeeds, it should return an `output_path`, an `output_uri`, and ge
 ### Codex
 
 - Symptom: `/mcp` does not show `speekify`.
-  Re-add the server with `codex mcp add speekify -- uv run speekify-mcp` or move the example config into `.codex/config.toml` or `~/.codex/config.toml`.
+  Re-add the server with `codex mcp add speekify -- uv run speekify mcp` or move the example config into `.codex/config.toml` or `~/.codex/config.toml`.
 - Symptom: the server is detected but generation fails on longer calls.
   Raise `tool_timeout_sec` in the Codex config. The example file already uses `600` seconds as a safer default for audio generation.
 - Symptom: a project config is ignored.
@@ -398,14 +404,14 @@ If the tool succeeds, it should return an `output_path`, an `output_uri`, and ge
 
 - `404 Not Found`: the proxy is usually forwarding `/` instead of `/mcp`, or the public URL is missing the `/mcp` suffix.
 - `502 Bad Gateway`: Speekify is not running in `streamable-http` mode, or the proxy target is wrong.
-- `Connection refused`: nothing is listening on `127.0.0.1:8000`; restart `uv run speekify-mcp --transport streamable-http`.
+- `Connection refused`: nothing is listening on `127.0.0.1:8000`; restart `uv run speekify mcp --transport streamable-http`.
 - Long-running requests terminate early: increase proxy read timeouts and client tool timeouts to accommodate generation time.
 
 ## Client support summary
 
 | Client | Local `stdio` | Remote HTTP MCP | Recommended Speekify setup |
 | --- | --- | --- | --- |
-| Claude Code | Yes | Yes | `uv run speekify-mcp` |
-| GitHub Copilot | Yes | Client-managed via MCP config | `.vscode/mcp.json` with `uv run speekify-mcp` |
-| Codex | Yes | Yes | `codex mcp add speekify -- uv run speekify-mcp` |
-| ChatGPT / OpenAI | No direct local UI flow documented | Yes | `speekify-mcp --transport streamable-http` behind a reachable URL |
+| Claude Code | Yes | Yes | `uv run speekify mcp` |
+| GitHub Copilot | Yes | Client-managed via MCP config | `.vscode/mcp.json` with `uv run speekify mcp` |
+| Codex | Yes | Yes | `codex mcp add speekify -- uv run speekify mcp` |
+| ChatGPT / OpenAI | No direct local UI flow documented | Yes | `speekify mcp --transport streamable-http` behind a reachable URL |

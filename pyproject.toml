@@ -1,6 +1,6 @@
 [project]
 name = "speekify"
-version = "0.0.7"
+version = "0.0.8"
 description = "CLI URL/text to WAV converter powered by Supertonic v3"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,7 +26,6 @@ dependencies = [
 
 [project.scripts]
 speekify = "speekify.__main__:main"
-speekify-mcp = "speekify.mcp_server:main"
 
 [dependency-groups]
 dev = [

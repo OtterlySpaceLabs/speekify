@@ -174,8 +174,34 @@ def create_mcp_server() -> Any:
     return mcp
 
 
+MCP_HELP_EPILOG = """\
+Wire Speekify into an AI client. Local clients use the default stdio transport;
+remote clients (ChatGPT) use streamable-http.
+
+Claude Code (local stdio):
+  claude mcp add --transport stdio speekify -- speekify mcp
+  Then run /mcp inside Claude Code to confirm the connection.
+
+Codex (local stdio):
+  codex mcp add speekify -- speekify mcp
+  Or add an [mcp_servers.speekify] block to ~/.codex/config.toml.
+
+ChatGPT / OpenAI (remote streamable-http):
+  speekify mcp --transport streamable-http
+  Serves http://127.0.0.1:8000/mcp; expose it behind a reachable HTTPS URL
+  (or an OpenAI Secure MCP Tunnel) and register that URL in your client.
+
+Full per-client setup, including GitHub Copilot: docs/mcp-clients.md
+"""
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the Speekify MCP server.")
+    parser = argparse.ArgumentParser(
+        prog="speekify mcp",
+        description="Run the Speekify MCP server so AI clients can generate WAV files.",
+        epilog=MCP_HELP_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--transport",
         choices=("stdio", "streamable-http"),

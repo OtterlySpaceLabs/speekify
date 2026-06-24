@@ -25,7 +25,7 @@ speekify \- convert inline text, stdin, a local text/PDF file, or readable URL c
 .I SOURCE ...
 ]
 .PP
-.B speekify-mcp
+.B speekify mcp
 [
 .I OPTIONS
 ]
@@ -62,7 +62,7 @@ or
 to preview extraction, translation, speech tags, and planned output paths without running synthesis.
 .PP
 Use
-.B speekify-mcp
+.B speekify mcp
 to expose Speekify as a local Model Context Protocol server for AI assistants that need to generate WAV files from text, URL content, or summarized news recaps.
 .SH ARGUMENTS
 .TP
@@ -157,7 +157,7 @@ Show setup help and exit.
 Accepts the same source, URL, language, voice, chunking, tagging, and output options as the main generation command, but does not synthesize or write a WAV file.
 .SH MCP SERVER
 The
-.B speekify-mcp
+.B speekify mcp
 entry point runs an MCP server over stdio by default. It exposes the
 .B speekify_generate_wav
 tool for converting inline text, readable URL content, or a local .txt/.md/.pdf file into a WAV file,
@@ -170,6 +170,31 @@ The generation tool accepts CLI-equivalent controls including English-island han
 .TP
 .B --transport
 Select the MCP transport, either stdio or streamable-http.
+.SS Connecting AI clients
+Local clients use the default stdio transport; remote clients such as ChatGPT use streamable-http.
+.TP
+.B Claude Code
+Register the local server, then run /mcp inside Claude Code to confirm it:
+.PP
+.RS
+.B claude mcp add --transport stdio speekify -- speekify mcp
+.RE
+.TP
+.B Codex
+Register the local server, or add an [mcp_servers.speekify] block to ~/.codex/config.toml:
+.PP
+.RS
+.B codex mcp add speekify -- speekify mcp
+.RE
+.TP
+.B ChatGPT / OpenAI
+Start the HTTP transport, which serves http://127.0.0.1:8000/mcp, then expose it behind a reachable HTTPS URL (or an OpenAI Secure MCP Tunnel) and register that URL in the client:
+.PP
+.RS
+.B speekify mcp --transport streamable-http
+.RE
+.PP
+See docs/mcp-clients.md for full per-client setup, including GitHub Copilot.
 .SH EXAMPLES
 .TP
 .B speekify "Hello world"
@@ -201,10 +226,10 @@ Inspect inline text generation without creating a WAV file.
 .B speekify setup
 Download and warm the local AI models.
 .TP
-.B speekify-mcp
+.B speekify mcp
 Run the MCP server for local AI clients over stdio.
 .TP
-.B speekify-mcp --transport streamable-http
+.B speekify mcp --transport streamable-http
 Run the MCP server with streamable HTTP transport for local experiments.
 .SH FILES
 .TP
