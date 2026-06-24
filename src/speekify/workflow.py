@@ -284,7 +284,6 @@ async def inspect_generation(
         status_callback=status_callback,
     )
     content = resolved.content
-    language_code = resolved.language_code
     _update_status(status_callback, "preparing text")
     normalized_text = normalize_text(content.text)
     prepared_text = PreparedText(
