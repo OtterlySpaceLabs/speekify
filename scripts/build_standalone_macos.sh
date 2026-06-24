@@ -26,6 +26,9 @@ uv run pyinstaller \
   --collect-all langdetect \
   src/speekify/__main__.py
 
+# ponytail: wipe stale staging first — a leftover dist/release/speekify (esp. an
+# old onefile binary as a *file*) makes `cp -R` nest/conflict ("Not a directory").
+rm -rf dist/release
 mkdir -p dist/release
 # onedir produces dist/speekify/ (exe + _internal/), copy the whole folder.
 cp -R dist/speekify dist/release/speekify
