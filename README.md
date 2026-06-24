@@ -36,6 +36,36 @@ uv run speekify setup
 
 If you skip setup, the models can still download automatically on first use.
 
+### With pip or uv
+
+Once released on PyPI, install with:
+
+**pip:**
+```bash
+pip install speekify
+speekify setup
+```
+
+**pipx** (isolated install, recommended for CLIs):
+```bash
+pipx install speekify
+speekify setup
+```
+
+**uv:**
+```bash
+uv tool install speekify
+speekify setup
+```
+
+**Run without installing** (uvx / pipx):
+```bash
+uvx speekify "Hello world"
+pipx run speekify "Hello world"
+```
+
+If you skip setup, the models can still download automatically on first use.
+
 ## Run
 
 Speekify is a CLI. Provide inline text, a URL, a path to a local `.txt`/`.md`/`.pdf` file, or piped stdin. A source that points at an existing `.txt`, `.md`, `.text`, or `.pdf` file is read automatically (PDF text is extracted with `pypdf`), and the file name becomes the default output title. URL mode supports readable articles, YouTube video transcripts (English captions/transcripts when available), and public X/Twitter post text (via the public oEmbed endpoint). X articles (`x.com/<user>/article/...`), protected posts, and very short posts cannot be extracted without a logged-in session and fail with a clear error instead:
