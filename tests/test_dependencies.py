@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from speekify.dependencies import (
-    CachedGenerationDependencyFactory,
-    GenerationDependencyFactories,
-    build_generation_dependencies,
-)
+from speekify import dependencies
+from speekify.dependencies import build_dependencies
 from speekify.tagging import TaggingConfig
 
 
@@ -13,37 +10,34 @@ class FakeSentimentAnalyzer:
         return ()
 
 
-def test_cached_generation_dependency_factory_reuses_heavy_dependencies() -> None:
+def _clear_caches() -> None:
+    dependencies._cached_synthesizer.cache_clear()
+    dependencies._cached_translator.cache_clear()
+    dependencies._cached_sentiment_analyzer.cache_clear()
+
+
+def test_build_dependencies_cached_reuses_heavy_dependencies(monkeypatch) -> None:
     synthesizers: list[object] = []
     translators: list[object] = []
     sentiment_analyzers: list[FakeSentimentAnalyzer] = []
 
-    def build_synthesizer() -> object:
-        synthesizer = object()
-        synthesizers.append(synthesizer)
-        return synthesizer
-
-    def build_translator() -> object:
-        translator = object()
-        translators.append(translator)
-        return translator
-
-    def build_sentiment_analyzer() -> FakeSentimentAnalyzer:
-        sentiment_analyzer = FakeSentimentAnalyzer()
-        sentiment_analyzers.append(sentiment_analyzer)
-        return sentiment_analyzer
-
-    cache = CachedGenerationDependencyFactory(
-        GenerationDependencyFactories(
-            synthesizer_factory=build_synthesizer,
-            translator_factory=build_translator,
-            sentiment_analyzer_factory=build_sentiment_analyzer,
-        )
+    monkeypatch.setattr(
+        "speekify.dependencies.build_synthesizer",
+        lambda: synthesizers.append(object()) or synthesizers[-1],
     )
+    monkeypatch.setattr(
+        "speekify.dependencies.build_translator",
+        lambda: translators.append(object()) or translators[-1],
+    )
+    monkeypatch.setattr(
+        "speekify.dependencies.build_sentiment_analyzer",
+        lambda: sentiment_analyzers.append(FakeSentimentAnalyzer()) or sentiment_analyzers[-1],
+    )
+    _clear_caches()
 
-    first = cache.build(TaggingConfig(use_sentiment=True))
-    second = cache.build(TaggingConfig(use_sentiment=True))
-    rules_only = cache.build(TaggingConfig(use_sentiment=False))
+    first = build_dependencies(TaggingConfig(use_sentiment=True), cached=True)
+    second = build_dependencies(TaggingConfig(use_sentiment=True), cached=True)
+    rules_only = build_dependencies(TaggingConfig(use_sentiment=False), cached=True)
 
     assert first.synthesizer is second.synthesizer is rules_only.synthesizer
     assert first.translator is second.translator is rules_only.translator
@@ -53,8 +47,7 @@ def test_cached_generation_dependency_factory_reuses_heavy_dependencies() -> Non
     assert len(sentiment_analyzers) == 1
 
 
-def test_build_generation_dependencies_accepts_custom_tagger_factory() -> None:
-    fake_tagger = object()
+def test_build_dependencies_fresh_builds_each_call(monkeypatch) -> None:
     sentiment_calls = 0
 
     def build_sentiment_analyzer() -> FakeSentimentAnalyzer:
@@ -62,15 +55,16 @@ def test_build_generation_dependencies_accepts_custom_tagger_factory() -> None:
         sentiment_calls += 1
         return FakeSentimentAnalyzer()
 
-    dependencies = build_generation_dependencies(
-        TaggingConfig(use_sentiment=True),
-        factories=GenerationDependencyFactories(
-            synthesizer_factory=object,
-            translator_factory=object,
-            sentiment_analyzer_factory=build_sentiment_analyzer,
-        ),
-        tagger_factory=lambda tagging_config: fake_tagger,
-    )
+    monkeypatch.setattr("speekify.dependencies.build_synthesizer", object)
+    monkeypatch.setattr("speekify.dependencies.build_translator", object)
+    monkeypatch.setattr("speekify.dependencies.build_sentiment_analyzer", build_sentiment_analyzer)
 
-    assert dependencies.tagger is fake_tagger
+    first = build_dependencies(TaggingConfig(use_sentiment=False))
+    second = build_dependencies(TaggingConfig(use_sentiment=False))
+
+    assert first.synthesizer is not second.synthesizer
     assert sentiment_calls == 0
+
+    with_sentiment = build_dependencies(TaggingConfig(use_sentiment=True))
+    assert sentiment_calls == 1
+    assert isinstance(with_sentiment.tagger.sentiment_analyzer, FakeSentimentAnalyzer)

@@ -87,49 +87,8 @@ async def generate_wav(
     return _serialize_generation(request, generation, log_path=log_path)
 
 
-def _build_request(
-    *,
-    source: str,
-    is_url_mode: bool,
-    title: str,
-    voice: str,
-    custom_style_path: str | None,
-    language_code: str,
-    speed: float,
-    steps: int,
-    max_chunk_length: int | None,
-    silence_duration: float,
-    english_islands: bool = True,
-    english_lexicon_path: str | None = None,
-    output_dir: str | None,
-    tags: bool = True,
-    tag_sentiment: bool = True,
-    tag_sigh: bool = True,
-    use_user_config: bool = True,
-):
-    return build_generation_request(
-        source_text=source,
-        is_url_mode=is_url_mode,
-        title=title,
-        voice=voice,
-        custom_style_path=custom_style_path,
-        language_code=language_code,
-        speed=speed,
-        steps=steps,
-        max_chunk_length=max_chunk_length,
-        silence_duration=silence_duration,
-        english_islands=english_islands,
-        english_lexicon_path=english_lexicon_path,
-        output_dir=output_dir,
-        tags=tags,
-        tag_sentiment=tag_sentiment,
-        tag_sigh=tag_sigh,
-        use_user_config=use_user_config,
-    )
-
-
 async def _generate_with_dependencies(request, *, logger: logging.Logger) -> GenerationResult:
-    return await run_generation(request, logger=logger, dependency_mode="cached")
+    return await run_generation(request, logger=logger, cached=True)
 
 
 def _serialize_generation(

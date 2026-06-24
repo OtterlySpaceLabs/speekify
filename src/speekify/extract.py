@@ -22,16 +22,6 @@ from speekify.extractors import (
     looks_like_youtube_url,
     should_retry_with_medium_feed,
 )
-from speekify.extractors import youtube as _youtube_provider
-
-
-_extract_youtube_info = _youtube_provider._extract_youtube_info
-_extract_text_from_timed_subtitle_text = (
-    _youtube_provider.extract_text_from_timed_subtitle_text
-)
-_extract_text_from_youtube_json3 = _youtube_provider.extract_text_from_youtube_json3
-
-
 async def extract_url(url: str, min_chars: int = MIN_URL_TEXT_LENGTH) -> ExtractedContent:
     validated_url = validate_url(url)
     if looks_like_youtube_url(validated_url):
@@ -115,7 +105,4 @@ __all__ = [
     "is_single_url_input",
     "normalize_text",
     "validate_url",
-    "_extract_text_from_timed_subtitle_text",
-    "_extract_text_from_youtube_json3",
-    "_extract_youtube_info",
 ]

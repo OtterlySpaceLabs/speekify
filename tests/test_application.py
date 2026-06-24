@@ -5,46 +5,14 @@ import logging
 
 from speekify.application import (
     build_generation_request,
-    build_runtime_dependencies,
-    build_tagging_config,
     run_generation,
     run_inspection,
 )
-from speekify.dependencies import GenerationDependencies, GenerationDependencyFactories
+from speekify.dependencies import GenerationDependencies
 from speekify.extract import ExtractedContent
 from speekify.tagging import TaggingConfig
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationInspection, GenerationResult
-
-
-def test_build_runtime_dependencies_uses_injected_factories() -> None:
-    synthesizer = object()
-    translator = object()
-    sentiment_analyzer = object()
-    tagger = object()
-
-    factories = GenerationDependencyFactories(
-        synthesizer_factory=lambda: synthesizer,
-        translator_factory=lambda: translator,
-        sentiment_analyzer_factory=lambda: sentiment_analyzer,
-    )
-
-    def fake_tagger_factory(tagging_config: TaggingConfig) -> object:
-        assert tagging_config.enabled is True
-        assert tagging_config.use_sentiment is True
-        assert tagging_config.enable_sigh is False
-        return tagger
-
-    dependencies = build_runtime_dependencies(
-        build_tagging_config(enabled=True, use_sentiment=True, enable_sigh=False),
-        dependency_mode="fresh",
-        factories=factories,
-        tagger_factory=fake_tagger_factory,
-    )
-
-    assert dependencies.synthesizer is synthesizer
-    assert dependencies.translator is translator
-    assert dependencies.tagger is tagger
 
 
 def test_build_generation_request_normalizes_without_user_config(tmp_path) -> None:
@@ -78,7 +46,7 @@ def test_build_generation_request_normalizes_without_user_config(tmp_path) -> No
     assert request.tagging_config.enable_sigh is True
 
 
-def test_run_generation_uses_custom_dependency_builder(monkeypatch, tmp_path) -> None:
+def test_run_generation_uses_built_dependencies(monkeypatch, tmp_path) -> None:
     captured: dict[str, object] = {}
     expected_result = GenerationResult(
         output_path=tmp_path / "generated.wav",
@@ -128,7 +96,7 @@ def test_run_generation_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
     translator = object()
     tagger = object()
 
-    def dependency_builder(tagging_config: TaggingConfig) -> GenerationDependencies:
+    def fake_build_dependencies(tagging_config: TaggingConfig, *, cached: bool = False) -> GenerationDependencies:
         assert tagging_config == request.tagging_config
         return GenerationDependencies(
             synthesizer=synthesizer,
@@ -136,13 +104,9 @@ def test_run_generation_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
             tagger=tagger,
         )
 
-    result = asyncio.run(
-        run_generation(
-            request,
-            logger=logger,
-            dependency_builder=dependency_builder,
-        )
-    )
+    monkeypatch.setattr("speekify.application.build_dependencies", fake_build_dependencies)
+
+    result = asyncio.run(run_generation(request, logger=logger))
 
     assert result is expected_result
     assert captured["request"] is request
@@ -152,7 +116,7 @@ def test_run_generation_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
     assert captured["logger"] is logger
 
 
-def test_run_inspection_uses_custom_dependency_builder(monkeypatch, tmp_path) -> None:
+def test_run_inspection_uses_built_dependencies(monkeypatch, tmp_path) -> None:
     captured: dict[str, object] = {}
     expected_result = GenerationInspection(
         output_path=tmp_path / "preview.wav",
@@ -198,7 +162,7 @@ def test_run_inspection_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
     translator = object()
     tagger = object()
 
-    def dependency_builder(tagging_config: TaggingConfig) -> GenerationDependencies:
+    def fake_build_dependencies(tagging_config: TaggingConfig, *, cached: bool = False) -> GenerationDependencies:
         assert tagging_config == request.tagging_config
         return GenerationDependencies(
             synthesizer=object(),
@@ -206,13 +170,9 @@ def test_run_inspection_uses_custom_dependency_builder(monkeypatch, tmp_path) ->
             tagger=tagger,
         )
 
-    result = asyncio.run(
-        run_inspection(
-            request,
-            logger=logger,
-            dependency_builder=dependency_builder,
-        )
-    )
+    monkeypatch.setattr("speekify.application.build_dependencies", fake_build_dependencies)
+
+    result = asyncio.run(run_inspection(request, logger=logger))
 
     assert result is expected_result
     assert captured["request"] is request

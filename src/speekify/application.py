@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
 
 from speekify.config import (
     AUTO_TTS_LANGUAGE,
@@ -13,12 +13,7 @@ from speekify.config import (
     DEFAULT_STEPS,
     DEFAULT_VOICE,
 )
-from speekify.dependencies import (
-    CachedGenerationDependencyFactory,
-    GenerationDependencies,
-    GenerationDependencyFactories,
-    build_generation_dependencies,
-)
+from speekify.dependencies import build_dependencies
 from speekify.tagging import TaggingConfig
 from speekify.user_config import UserConfig, config_value, load_user_config
 from speekify.validation import (
@@ -34,11 +29,6 @@ from speekify.workflow import (
     inspect_generation,
 )
 
-DependencyMode = Literal["fresh", "cached"]
-DependencyBuilder = Callable[[TaggingConfig], GenerationDependencies]
-TaggerFactory = Callable[[TaggingConfig], object]
-
-_DEPENDENCY_CACHE = CachedGenerationDependencyFactory()
 _GENERATION_LOCK: asyncio.Lock | None = None
 
 
@@ -120,33 +110,20 @@ async def run_generation(
     *,
     logger: logging.Logger,
     status_callback: Callable[[str], None] | None = None,
-    dependency_mode: DependencyMode = "fresh",
-    dependency_builder: DependencyBuilder | None = None,
+    cached: bool = False,
 ) -> GenerationResult:
-    dependencies = _resolve_dependencies(
-        request.tagging_config,
-        dependency_mode=dependency_mode,
-        dependency_builder=dependency_builder,
-    )
-    if dependency_mode == "cached":
-        async with _generation_lock():
-            return await generate_audio(
-                request,
-                synthesizer=dependencies.synthesizer,
-                translator=dependencies.translator,
-                tagger=dependencies.tagger,
-                logger=logger,
-                status_callback=status_callback,
-            )
-
-    return await generate_audio(
-        request,
-        synthesizer=dependencies.synthesizer,
-        translator=dependencies.translator,
-        tagger=dependencies.tagger,
-        logger=logger,
-        status_callback=status_callback,
-    )
+    dependencies = build_dependencies(request.tagging_config, cached=cached)
+    # ponytail: cached mode shares one set of models across MCP calls; serialize them.
+    lock = _generation_lock() if cached else contextlib.nullcontext()
+    async with lock:
+        return await generate_audio(
+            request,
+            synthesizer=dependencies.synthesizer,
+            translator=dependencies.translator,
+            tagger=dependencies.tagger,
+            logger=logger,
+            status_callback=status_callback,
+        )
 
 
 async def run_inspection(
@@ -154,14 +131,9 @@ async def run_inspection(
     *,
     logger: logging.Logger,
     status_callback: Callable[[str], None] | None = None,
-    dependency_mode: DependencyMode = "fresh",
-    dependency_builder: DependencyBuilder | None = None,
+    cached: bool = False,
 ) -> GenerationInspection:
-    dependencies = _resolve_dependencies(
-        request.tagging_config,
-        dependency_mode=dependency_mode,
-        dependency_builder=dependency_builder,
-    )
+    dependencies = build_dependencies(request.tagging_config, cached=cached)
     return await inspect_generation(
         request,
         translator=dependencies.translator,
@@ -175,33 +147,6 @@ def _expand_path(value: str | Path | None) -> Path | None:
     if value is None:
         return None
     return Path(value).expanduser()
-
-
-def build_runtime_dependencies(
-    tagging_config: TaggingConfig,
-    *,
-    dependency_mode: DependencyMode = "fresh",
-    factories: GenerationDependencyFactories | None = None,
-    tagger_factory: TaggerFactory | None = None,
-) -> GenerationDependencies:
-    if dependency_mode == "cached" and factories is None and tagger_factory is None:
-        return _DEPENDENCY_CACHE.build(tagging_config)
-    return build_generation_dependencies(
-        tagging_config,
-        factories=factories,
-        tagger_factory=tagger_factory,
-    )
-
-
-def _resolve_dependencies(
-    tagging_config: TaggingConfig,
-    *,
-    dependency_mode: DependencyMode,
-    dependency_builder: DependencyBuilder | None,
-) -> GenerationDependencies:
-    if dependency_builder is not None:
-        return dependency_builder(tagging_config)
-    return build_runtime_dependencies(tagging_config, dependency_mode=dependency_mode)
 
 
 def _generation_lock() -> asyncio.Lock:

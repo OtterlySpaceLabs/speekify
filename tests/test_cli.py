@@ -148,19 +148,11 @@ def test_main_passes_supertonic_generation_options(tmp_path, monkeypatch, capsys
 
 def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
-    fake_tagger = object()
-
-    def fake_build_tagger(tagging_config: object) -> object:
-        assert getattr(tagging_config, "enabled") is True
-        assert getattr(tagging_config, "use_sentiment") is True
-        assert getattr(tagging_config, "enable_sigh") is True
-        return fake_tagger
 
     async def fake_run_generation(request, **kwargs: object) -> GenerationResult:
         assert request.tagging_config.enabled is True
         assert request.tagging_config.use_sentiment is True
         assert request.tagging_config.enable_sigh is True
-        assert callable(kwargs["dependency_builder"])
         return GenerationResult(
             output_path=tmp_path / "emotion-tags.wav",
             artifact=SynthesisArtifact(
@@ -189,19 +181,11 @@ def test_main_enables_emotion_tagging_by_default(tmp_path, monkeypatch, capsys) 
 
 def test_main_can_keep_simple_tag_rules_without_emotion(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
-    fake_tagger = object()
-
-    def fake_build_tagger(tagging_config: object) -> object:
-        assert getattr(tagging_config, "enabled") is True
-        assert getattr(tagging_config, "use_sentiment") is False
-        assert getattr(tagging_config, "enable_sigh") is False
-        return fake_tagger
 
     async def fake_run_generation(request, **kwargs: object) -> GenerationResult:
         assert request.tagging_config.enabled is True
         assert request.tagging_config.use_sentiment is False
         assert request.tagging_config.enable_sigh is False
-        assert callable(kwargs["dependency_builder"])
         return GenerationResult(
             output_path=tmp_path / "simple-tags.wav",
             artifact=SynthesisArtifact(
@@ -230,17 +214,9 @@ def test_main_can_keep_simple_tag_rules_without_emotion(tmp_path, monkeypatch, c
 
 def test_main_passes_disabled_tagging_config(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
-    fake_tagger = object()
-
-    def fake_build_tagger(tagging_config: object) -> object:
-        assert getattr(tagging_config, "enabled") is False
-        assert getattr(tagging_config, "use_sentiment") is False
-        assert getattr(tagging_config, "enable_sigh") is False
-        return fake_tagger
 
     async def fake_run_generation(request, **kwargs: object) -> GenerationResult:
         assert request.tagging_config.enabled is False
-        assert callable(kwargs["dependency_builder"])
         return GenerationResult(
             output_path=tmp_path / "no-tags.wav",
             artifact=SynthesisArtifact(

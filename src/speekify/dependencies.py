@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 
 from speekify.tagging import SentimentAnalyzer, SupertoneTagger, TaggingConfig
 
@@ -39,56 +39,37 @@ class GenerationDependencies:
     tagger: object
 
 
-@dataclass(frozen=True)
-class GenerationDependencyFactories:
-    synthesizer_factory: Callable[[], object] = build_synthesizer
-    translator_factory: Callable[[], object] = build_translator
-    sentiment_analyzer_factory: Callable[[], SentimentAnalyzer] = build_sentiment_analyzer
+# ponytail: lru_cache memoizes the heavy model loads so the long-lived MCP server
+# reuses them across calls; call <fn>.cache_clear() if a fresh load is ever needed.
+@lru_cache(maxsize=1)
+def _cached_synthesizer() -> object:
+    return build_synthesizer()
 
 
-def build_generation_dependencies(
+@lru_cache(maxsize=1)
+def _cached_translator() -> object:
+    return build_translator()
+
+
+@lru_cache(maxsize=1)
+def _cached_sentiment_analyzer() -> SentimentAnalyzer:
+    return build_sentiment_analyzer()
+
+
+def build_dependencies(
     tagging_config: TaggingConfig,
     *,
-    factories: GenerationDependencyFactories | None = None,
-    tagger_factory: Callable[[TaggingConfig], object] | None = None,
+    cached: bool = False,
 ) -> GenerationDependencies:
-    active_factories = factories or GenerationDependencyFactories()
-    if tagger_factory is not None:
-        tagger = tagger_factory(tagging_config)
-    else:
-        sentiment_analyzer = None
-        if tagging_config.use_sentiment:
-            sentiment_analyzer = active_factories.sentiment_analyzer_factory()
-        tagger = build_tagger(tagging_config, sentiment_analyzer=sentiment_analyzer)
-    return GenerationDependencies(
-        synthesizer=active_factories.synthesizer_factory(),
-        translator=active_factories.translator_factory(),
-        tagger=tagger,
-    )
-
-
-class CachedGenerationDependencyFactory:
-    def __init__(self, factories: GenerationDependencyFactories | None = None) -> None:
-        self._factories = factories or GenerationDependencyFactories()
-        self._synthesizer: object | None = None
-        self._translator: object | None = None
-        self._sentiment_analyzer: SentimentAnalyzer | None = None
-
-    def build(self, tagging_config: TaggingConfig) -> GenerationDependencies:
-        if self._synthesizer is None:
-            self._synthesizer = self._factories.synthesizer_factory()
-        if self._translator is None:
-            self._translator = self._factories.translator_factory()
-
-        sentiment_analyzer = None
-        if tagging_config.use_sentiment:
-            if self._sentiment_analyzer is None:
-                self._sentiment_analyzer = self._factories.sentiment_analyzer_factory()
-            sentiment_analyzer = self._sentiment_analyzer
-
-        return GenerationDependencies(
-            synthesizer=self._synthesizer,
-            translator=self._translator,
-            tagger=build_tagger(tagging_config, sentiment_analyzer=sentiment_analyzer),
+    synthesizer = _cached_synthesizer() if cached else build_synthesizer()
+    translator = _cached_translator() if cached else build_translator()
+    sentiment_analyzer = None
+    if tagging_config.use_sentiment:
+        sentiment_analyzer = (
+            _cached_sentiment_analyzer() if cached else build_sentiment_analyzer()
         )
-
+    return GenerationDependencies(
+        synthesizer=synthesizer,
+        translator=translator,
+        tagger=build_tagger(tagging_config, sentiment_analyzer=sentiment_analyzer),
+    )

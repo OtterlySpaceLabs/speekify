@@ -5,12 +5,14 @@ import httpx
 
 from speekify.extract import (
     ExtractedContent,
-    _extract_text_from_timed_subtitle_text,
-    _extract_text_from_youtube_json3,
     extract_url,
     is_single_url_input,
     normalize_text,
     validate_url,
+)
+from speekify.extractors.youtube import (
+    extract_text_from_timed_subtitle_text,
+    extract_text_from_youtube_json3,
 )
 
 
@@ -222,7 +224,7 @@ async def test_extract_url_rejects_x_status_when_oembed_text_is_too_short(monkey
 
 def test_extract_text_from_youtube_json3_joins_segments() -> None:
     assert (
-        _extract_text_from_youtube_json3(
+        extract_text_from_youtube_json3(
             '{"events": [{"segs": [{"utf8": "Hello "}, {"utf8": "world."}]}]}'
         )
         == "Hello world."
@@ -242,7 +244,7 @@ Hello &amp; welcome.
 Next line.
 """
 
-    assert _extract_text_from_timed_subtitle_text(subtitle_text) == "Hello & welcome. Next line."
+    assert extract_text_from_timed_subtitle_text(subtitle_text) == "Hello & welcome. Next line."
 
 
 @pytest.mark.asyncio

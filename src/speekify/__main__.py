@@ -452,7 +452,6 @@ def _run_generation(
                     request,
                     logger=logger,
                     status_callback=update_status,
-                    dependency_builder=_build_generation_dependencies,
                 )
             )
     except Exception as exc:
@@ -522,7 +521,6 @@ def _run_inspection(
                     request,
                     logger=logger,
                     status_callback=update_status,
-                    dependency_builder=_build_generation_dependencies,
                 )
             )
     except Exception as exc:
@@ -745,38 +743,6 @@ def _build_sentiment_analyzer() -> object:
     from speekify.dependencies import build_sentiment_analyzer
 
     return build_sentiment_analyzer()
-
-
-def _build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bool) -> object:
-    return application.build_tagging_config(
-        enabled=enabled,
-        use_sentiment=use_sentiment,
-        enable_sigh=enable_sigh,
-    )
-
-
-def _build_tagger(tagging_config: object) -> object:
-    from speekify.dependencies import build_tagger
-
-    sentiment_analyzer = None
-    if getattr(tagging_config, "use_sentiment", False):
-        sentiment_analyzer = _build_sentiment_analyzer()
-    return build_tagger(tagging_config, sentiment_analyzer=sentiment_analyzer)
-
-
-def _build_generation_dependencies(tagging_config: object) -> object:
-    from speekify.dependencies import GenerationDependencyFactories
-
-    return application.build_runtime_dependencies(
-        tagging_config,
-        dependency_mode="fresh",
-        factories=GenerationDependencyFactories(
-            synthesizer_factory=_build_synthesizer,
-            translator_factory=_build_translator,
-            sentiment_analyzer_factory=_build_sentiment_analyzer,
-        ),
-        tagger_factory=_build_tagger,
-    )
 
 
 def _warm_up_models(

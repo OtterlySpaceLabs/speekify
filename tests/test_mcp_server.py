@@ -4,8 +4,9 @@ import asyncio
 
 import pytest
 
+from speekify.application import build_generation_request
 from speekify.extract import ExtractedContent
-from speekify.mcp_server import _build_request, create_mcp_server, generate_wav, generation_defaults
+from speekify.mcp_server import create_mcp_server, generate_wav, generation_defaults
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationResult
 
@@ -22,9 +23,9 @@ def test_generation_defaults_are_mcp_serializable() -> None:
     assert defaults["steps_range"] == {"min": 1, "max": 100}
 
 
-def test_build_request_normalizes_and_validates_options(tmp_path) -> None:
-    request = _build_request(
-        source="  Bonjour le monde  ",
+def test_generation_request_normalizes_and_validates_options(tmp_path) -> None:
+    request = build_generation_request(
+        source_text="  Bonjour le monde  ",
         is_url_mode=False,
         title="  Recap du jour  ",
         voice="m1",
@@ -59,12 +60,12 @@ def test_build_request_normalizes_and_validates_options(tmp_path) -> None:
     [
         ("voice", "robot", "Voice must be one of"),
         ("language_code", "xx", "Language code must be one of"),
-        ("source", "   ", "A text source or URL is required"),
+        ("source_text", "   ", "A text source or URL is required"),
     ],
 )
-def test_build_request_rejects_invalid_mcp_inputs(field: str, value: str, message: str) -> None:
+def test_generation_request_rejects_invalid_mcp_inputs(field: str, value: str, message: str) -> None:
     kwargs = {
-        "source": "Bonjour",
+        "source_text": "Bonjour",
         "is_url_mode": False,
         "title": "",
         "voice": "M5",
@@ -84,7 +85,7 @@ def test_build_request_rejects_invalid_mcp_inputs(field: str, value: str, messag
     kwargs[field] = value
 
     with pytest.raises(ValueError, match=message):
-        _build_request(**kwargs)
+        build_generation_request(**kwargs)
 
 
 def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> None:
@@ -166,7 +167,7 @@ def test_generate_wav_returns_supplied_title_in_structured_payload(tmp_path, mon
     assert result["title"] == "Custom title"
 
 
-def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> None:
+def test_generation_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "config.toml"
     lexicon_path = tmp_path / "lexicon.txt"
     output_dir = tmp_path / "audio"
@@ -190,8 +191,8 @@ def test_build_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> No
     )
     monkeypatch.setenv("SPEEKIFY_CONFIG", str(config_path))
 
-    request = _build_request(
-        source="Bonjour",
+    request = build_generation_request(
+        source_text="Bonjour",
         is_url_mode=False,
         title="",
         voice="M5",
