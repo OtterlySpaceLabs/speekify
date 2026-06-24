@@ -1,12 +1,19 @@
 # Speekify Release Procedure
 
-This document captures the release and distribution steps for later. It assumes the code changes are already merged locally and that the repository is clean enough to tag a release.
+This document is the canonical, end-to-end procedure to cut a Speekify release.
+The release is **built and published entirely from a local macOS machine**. There
+is no GitHub Actions / CI build: the `.github/workflows/release.yml` workflow was
+removed on purpose so that nothing runs on GitHub on tag push.
+
+It assumes the code changes are already merged locally and the repository is clean
+enough to tag a release.
 
 ## Goal
 
-Publish a macOS standalone binary that can be installed without Python or uv, then make it available through:
+Publish a macOS standalone binary that can be installed without Python or uv, then
+make it available through:
 
-- GitHub Releases
+- GitHub Releases (artifact hosting only)
 - a Homebrew tap
 - direct archive download
 
@@ -14,34 +21,42 @@ Current production setup:
 
 - source repository: `OtterlySpaceLabs/speekify` (private)
 - public Homebrew tap: `OtterlySpaceLabs/homebrew-speekify`
-- public Homebrew binary asset: GitHub Release asset attached to `OtterlySpaceLabs/homebrew-speekify`
+- public binary asset: a GitHub Release asset attached to `OtterlySpaceLabs/homebrew-speekify`
 
-## Current distribution model
+The public asset distributed to users and Homebrew must always come from the
+**tap** release, not the private source release.
 
-- End users can run `speekify` directly from a standalone macOS binary.
-- The first-run model preparation is done with `speekify setup`, which warms Supertonic, CardiffNLP sentiment, and English-to-French translation by default.
-- Direct CLI generation writes WAV files to the current working directory unless `--output-dir` is provided.
+## Distribution model
+
+- End users run `speekify` directly from a standalone macOS binary.
+- The binary is built `--onedir` (a folder: the launcher plus a sibling
+  `_internal/` with the bundled libs), **not** `--onefile`. Onefile re-extracted
+  the whole torch/transformers bundle to a temp dir on every launch, so even
+  `speekify -v` took 13–20s. With onedir, the first run after install/upgrade is
+  ~11s (one-time macOS Gatekeeper scan of the unsigned dylibs), every run after is
+  ~0.5s. Do not switch back to `--onefile`.
+- First-run model preparation is done with `speekify setup`.
+- Direct generation writes WAV files to the current directory unless `--output-dir`
+  is given.
 
 ## Prerequisites
 
-- Access to the `OtterlySpaceLabs/speekify` GitHub repository
-- Access to the `OtterlySpaceLabs/homebrew-speekify` GitHub repository
-- Permission to create tags and releases
-- A macOS machine if you want to build and test locally
-- `uv` available locally if you build outside GitHub Actions
-- `gh` authenticated with permission to read the private source repo and publish releases in the tap repo
+- A macOS machine with the same architecture as the published archive (currently `arm64`)
+- Read/write access to both GitHub repositories
+- `gh` authenticated with the `repo` scope
+- `uv`, `git`, `curl`, `tar`, `shasum`, and `brew` installed locally
+- The source repo open at its root
+- The Homebrew tap cloned next to it at `../homebrew-speekify`
 
 ## Files involved
 
-- `scripts/build_standalone_macos.sh`
-- `scripts/render_homebrew_formula.py`
-- `.github/workflows/release.yml`
+- `scripts/build_standalone_macos.sh` — local PyInstaller `--onedir` build + archive
+- `scripts/render_homebrew_formula.py` — renders `Formula/speekify.rb` (onedir install)
+- `pyproject.toml` — `[project].version`
 
-## Recommended release flow
+## Release flow (local only)
 
-### 1. Validate the repository locally
-
-Run:
+### 1. Validate the repository
 
 ```bash
 uv sync --group dev
@@ -49,164 +64,99 @@ uv run pytest
 uv run ruff check .
 ```
 
-Expected result:
+Tests and lint must pass.
 
-- tests pass
-- lint passes
+### 2. Set the version
 
-### 2. Choose the release version
+Bump `[project].version` in `pyproject.toml` to the target version (example `0.1.0`),
+commit it, and push the branch:
 
-Example version:
-
-```text
-0.1.0
+```bash
+git add pyproject.toml
+git commit -m "chore(release): bump version to 0.1.0"
+git push origin main
 ```
 
-Tag format:
+### 3. Build the archive locally
 
-```text
-v0.1.0
+```bash
+./scripts/build_standalone_macos.sh
 ```
 
-Before tagging, make sure the version in `pyproject.toml` matches the intended release version.
+This syncs dev deps, builds the `--onedir` binary with PyInstaller, packages
+`dist/speekify-macos-<arch>.tar.gz` (top level: `speekify/` folder + `share/`), and
+prints the archive SHA256. Capture it:
 
-### 3. Create and push the Git tag
+```bash
+ARCH="$(uname -m)"
+ARCHIVE="dist/speekify-macos-${ARCH}.tar.gz"
+SHA256="$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
+echo "$SHA256"
+```
 
-Run:
+### 4. Tag the release
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Expected result:
+No workflow runs on this push (the CI workflow was removed). The tag is just a
+record pointing at the released commit.
 
-- the GitHub Actions workflow `.github/workflows/release.yml` starts automatically
-- the workflow builds `speekify-macos-arm64.tar.gz` or the matching archive for the runner architecture
-- the workflow publishes that archive to GitHub Releases
-
-### 4. Wait for the release workflow to finish
-
-After the workflow completes, verify on GitHub that:
-
-- a release exists for the pushed tag
-- the standalone archive is attached to the release assets
-
-Asset naming currently follows this pattern:
-
-```text
-speekify-macos-arm64.tar.gz
-```
-
-If the runner architecture changes, the suffix may be `x86_64` instead of `arm64`.
-
-### 5. Download the private release asset locally
-
-Because `OtterlySpaceLabs/speekify` is private, Homebrew cannot download assets directly from that repository.
-
-Download the private release asset with `gh`:
+### 5. Publish the private source release
 
 ```bash
-mkdir -p dist/public-release
-gh release download v0.1.0 \
+gh release create v0.1.0 "$ARCHIVE" \
   --repo OtterlySpaceLabs/speekify \
-  --pattern speekify-macos-arm64.tar.gz \
-  --dir dist/public-release
+  --title "Speekify v0.1.0" \
+  --notes "Release notes here"
 ```
 
-Expected result:
+### 6. Publish the public tap release
 
-- `dist/public-release/speekify-macos-arm64.tar.gz` exists locally
-
-### 6. Publish the archive in the public tap repository
-
-Create or update a public release in `OtterlySpaceLabs/homebrew-speekify` and upload the same archive there:
+Because `OtterlySpaceLabs/speekify` is private, Homebrew cannot fetch from it.
+Upload the **same** archive to the public tap repo:
 
 ```bash
-gh release create speekify-v0.1.0 \
-  dist/public-release/speekify-macos-arm64.tar.gz \
+gh release create speekify-v0.1.0 "$ARCHIVE" \
   --repo OtterlySpaceLabs/homebrew-speekify \
   --title "Speekify v0.1.0" \
   --notes "Public binary release for Homebrew install"
 ```
 
-Expected result:
-
-- the asset is publicly downloadable from `OtterlySpaceLabs/homebrew-speekify`
-- Homebrew can fetch the archive anonymously
-
-### 7. Compute or copy the SHA256 of the public archive
-
-If you built locally, use:
+### 7. Render and publish the Homebrew formula
 
 ```bash
-shasum -a 256 dist/public-release/speekify-macos-arm64.tar.gz
-```
-
-Keep the final SHA256 value for the Homebrew formula.
-
-### 8. Render the Homebrew formula
-
-Run:
-
-```bash
-python scripts/render_homebrew_formula.py \
+uv run python scripts/render_homebrew_formula.py \
   --version 0.1.0 \
   --url https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/speekify-v0.1.0/speekify-macos-arm64.tar.gz \
-  --sha256 <sha256> \
-  --homepage https://github.com/OtterlySpaceLabs/speekify
-```
-
-Optional output to a file:
-
-```bash
-python scripts/render_homebrew_formula.py \
-  --version 0.1.0 \
-  --url https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/speekify-v0.1.0/speekify-macos-arm64.tar.gz \
-  --sha256 <sha256> \
+  --sha256 "$SHA256" \
   --homepage https://github.com/OtterlySpaceLabs/speekify \
-  --output /Users/hiboux/Documents/GitHub/homebrew-speekify/Formula/speekify.rb
+  --output ../homebrew-speekify/Formula/speekify.rb
+
+cd ../homebrew-speekify
+git add Formula/speekify.rb
+git commit -m "Update speekify formula to 0.1.0"
+git push origin main
+cd -
 ```
 
-Expected result:
+The rendered formula installs the onedir folder into `libexec` and symlinks the
+launcher into `bin` (`bin.install_symlink libexec/"speekify/speekify"`), so the
+launcher finds its sibling `_internal/`. It also installs `share/man/man1/speekify.1`.
 
-- a valid Homebrew formula named `Speekify` is generated
-- the formula installs the standalone binary into `bin`
-- the formula installs `share/man/man1/speekify.1`
-- the formula test checks `speekify --help`, `speekify --version`, and `speekify setup --help`
+Use `uv run python`, not `python` (the local env may not expose `python`).
 
-### 9. Publish the Homebrew formula in the tap repository
-
-In the tap repository:
-
-- add or update the formula file, usually `Formula/speekify.rb`
-- commit the change
-- push to the default branch
-
-At that point, end users can install with:
-
-```bash
-brew tap OtterlySpaceLabs/speekify
-brew install speekify
-man speekify
-speekify setup
-```
-
-### 10. Smoke-test the install paths
-
-Test both paths when possible.
+### 8. Smoke-test the install paths
 
 Homebrew path:
 
 ```bash
-brew uninstall speekify || true
-brew untap OtterlySpaceLabs/speekify || true
-brew tap OtterlySpaceLabs/speekify
-brew install speekify
+brew update
+brew upgrade speekify   # or: brew install speekify
+speekify --version      # first run ~11s (one-time scan), then ~0.5s
 speekify --help
-speekify setup --skip-translation
-speekify --no-tag-sentiment --no-tag-sigh "Hello from brew"
-speekify "Hello from brew"
 ```
 
 Direct archive path:
@@ -214,56 +164,41 @@ Direct archive path:
 ```bash
 curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/latest/download/speekify-macos-arm64.tar.gz
 tar -xzf speekify.tar.gz
-./speekify --help
-./speekify setup --skip-translation
-./speekify --no-tag-sentiment --no-tag-sigh "Hello from archive"
-./speekify "Hello from archive"
+./speekify/speekify --help
 ```
-
-Expected result:
-
-- the binary starts without Python installed separately
-- `speekify setup` warms the Supertonic, sentiment, and translation models by default
-- direct generation creates a WAV in the current directory
-
-## Optional local build workflow
-
-If you want to build before tagging, run:
-
-```bash
-./scripts/build_standalone_macos.sh
-```
-
-This script currently:
-
-- syncs dev dependencies
-- builds a one-file binary with PyInstaller
-- creates a release archive in `dist/`
-- prints the SHA256 of the archive
 
 ## Release checklist
 
-- [ ] `pyproject.toml` version is correct
+- [ ] `pyproject.toml` version is correct, committed, and pushed
 - [ ] `uv run pytest` passes
 - [ ] `uv run ruff check .` passes
-- [ ] tag is pushed
-- [ ] private GitHub Release asset is published in `OtterlySpaceLabs/speekify`
-- [ ] public GitHub Release asset is published in `OtterlySpaceLabs/homebrew-speekify`
-- [ ] SHA256 is recorded
-- [ ] Homebrew formula is generated
-- [ ] Homebrew tap is updated
-- [ ] `speekify setup` works after install
-- [ ] `speekify "Hello"` writes a WAV in the current directory
+- [ ] archive built locally and SHA256 captured
+- [ ] tag `vX.Y.Z` created and pushed
+- [ ] private source release published with the archive
+- [ ] public tap release `speekify-vX.Y.Z` published with the archive
+- [ ] `Formula/speekify.rb` rendered with the public URL and SHA256, committed and pushed
+- [ ] `brew upgrade speekify` works and `speekify --version` is correct
+- [ ] direct archive runs without a separate Python install
+
+## Rollback
+
+If a published release is wrong, delete both releases, fix locally, and redo:
+
+```bash
+gh release delete v0.1.0 --repo OtterlySpaceLabs/speekify --yes || true
+gh release delete speekify-v0.1.0 --repo OtterlySpaceLabs/homebrew-speekify --yes || true
+git tag -d v0.1.0 || true
+git push origin ":refs/tags/v0.1.0" || true
+```
 
 ## Known limitations
 
-- The current GitHub Actions workflow publishes the standalone archive only to the private source repository release.
-- The public Homebrew asset upload to `OtterlySpaceLabs/homebrew-speekify` is still manual.
-- The release process is currently macOS-focused.
+- The release process is macOS-focused and `arm64`-only at the moment.
+- The binary is unsigned, so the first launch after each install/upgrade pays a
+  one-time macOS Gatekeeper scan.
 
 ## Future improvements
 
-- Automate public asset upload to `OtterlySpaceLabs/homebrew-speekify` after each tagged release
-- Automate formula updates in the Homebrew tap after each tagged release
-- Add separate archives for Apple Silicon and Intel macOS if needed
-- Add notarization and signing if distribution constraints require it
+- Wrap the steps above in a single local `scripts/release.sh`.
+- Add a separate `x86_64` archive if Intel macOS support is needed.
+- Codesign + notarize the bundle to remove the one-time first-run scan.

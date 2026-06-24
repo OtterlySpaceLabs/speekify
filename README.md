@@ -260,7 +260,7 @@ python scripts/render_homebrew_formula.py \
 	--sha256 <sha256>
 ```
 
-The GitHub Actions workflow in `.github/workflows/release.yml` automates the same release packaging on tag pushes.
+Releases are built and published entirely locally — there is no GitHub Actions build. See [docs/release-procedure.md](docs/release-procedure.md) for the full step-by-step procedure.
 
 ## Notes
 

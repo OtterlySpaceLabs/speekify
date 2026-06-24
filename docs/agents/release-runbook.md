@@ -10,7 +10,11 @@ Il doit permettre a un futur agent IA d'executer la release de bout en bout avec
 - la branche de travail
 - les notes de version a publier, si elles ne peuvent pas etre derivees des commits
 
-Le workflow canonique de ce depot est un workflow manuel, reproductible, construit localement sur macOS, puis publie dans deux depots GitHub:
+Le workflow canonique de ce depot est un workflow manuel, reproductible, construit
+**entierement en local** sur macOS, puis publie dans deux depots GitHub. Il n'y a
+plus de build GitHub Actions: le workflow `.github/workflows/release.yml` a ete
+supprime, donc aucun run ne se declenche au push de tag et il n'y a plus rien a
+annuler.
 
 - le depot source prive `OtterlySpaceLabs/speekify`
 - le depot Homebrew public `OtterlySpaceLabs/homebrew-speekify`
@@ -38,7 +42,7 @@ Si aucune note de version n'est fournie, l'agent doit deriver un resume concis a
 
 - Machine macOS avec la meme architecture que l'archive publiee, actuellement `arm64`
 - Acces en lecture/ecriture aux deux depots GitHub
-- `gh` authentifie avec les scopes `repo` et `workflow`
+- `gh` authentifie avec le scope `repo`
 - `uv`, `git`, `curl`, `tar`, `shasum` et `brew` installes localement
 - Depot source ouvert a sa racine
 - Depot Homebrew disponible localement dans le dossier parent, sous `../homebrew-speekify`
@@ -136,8 +140,7 @@ SHA256="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
 git tag "$TAG"
 git push origin "$TAG"
 
-RUN_ID="$(GH_PAGER=cat gh run list --repo OtterlySpaceLabs/speekify --workflow release.yml --limit 10 --json databaseId,headBranch,status --jq '.[] | select(.headBranch == env.TAG) | .databaseId' | head -n 1)"
-if [[ -n "$RUN_ID" ]]; then gh run cancel "$RUN_ID" --repo OtterlySpaceLabs/speekify; fi
+# Aucun workflow ne se declenche au push de tag (release.yml a ete supprime).
 
 GH_PAGER=cat gh release create "$TAG" "$ARCHIVE_PATH" \
   --repo OtterlySpaceLabs/speekify \
@@ -172,8 +175,9 @@ uv run pytest
 uv run ruff check .
 test -f "$ARCHIVE_PATH"
 shasum -a 256 "$ARCHIVE_PATH"
-./dist/speekify --help >/dev/null
-./dist/speekify setup --help >/dev/null
+# Build --onedir: le lanceur est dans le dossier dist/speekify/, pas dist/speekify.
+./dist/speekify/speekify --help >/dev/null
+./dist/speekify/speekify setup --help >/dev/null
 ```
 
 Resultat attendu:
@@ -214,16 +218,9 @@ git tag "$TAG"
 git push origin "$TAG"
 ```
 
-Important: le depot source possede un workflow GitHub Actions declenche sur `push` de tag. Si ce run demarre alors que la release est faite manuellement, il faut l'annuler pour eviter des assets ou releases en conflit.
-
-Commande type:
-
-```bash
-GH_PAGER=cat gh run list --repo OtterlySpaceLabs/speekify --workflow release.yml --limit 5 --json databaseId,status,headBranch,displayTitle
-gh run cancel <databaseId> --repo OtterlySpaceLabs/speekify
-```
-
-Annuler uniquement la run dont `headBranch` vaut `vX.Y.Z`.
+Le depot source ne possede plus de workflow GitHub Actions: `release.yml` a ete
+supprime. Le push de tag ne declenche donc aucun build et il n'y a aucun run a
+annuler. Toute la build et la publication se font en local.
 
 ## 10. Push vers le depot distant
 
@@ -308,8 +305,8 @@ cd "$TMPDIR"
 curl -L -o speekify.tar.gz "$PUBLIC_ASSET_URL"
 shasum -a 256 speekify.tar.gz
 tar -xzf speekify.tar.gz
-./speekify --help >/dev/null
-./speekify setup --help >/dev/null
+./speekify/speekify --help >/dev/null
+./speekify/speekify setup --help >/dev/null
 MANPATH="$TMPDIR/share/man${MANPATH:+:$MANPATH}" man speekify >/dev/null
 ```
 
@@ -345,7 +342,6 @@ Resultat attendu:
 - [ ] le SHA256 de l'archive a ete capture
 - [ ] la branche source a ete poussee
 - [ ] le tag `vX.Y.Z` a ete cree et pousse
-- [ ] la run GitHub Actions declenchee par le tag a ete annulee si la publication est manuelle
 - [ ] la release source `vX.Y.Z` existe et contient l'archive
 - [ ] la release publique `speekify-vX.Y.Z` existe et contient l'archive
 - [ ] `Formula/speekify.rb` pointe vers l'URL publique correcte et le bon SHA256
@@ -379,8 +375,7 @@ git push origin "$TAG"
 ### Points de vigilance obligatoires
 
 - Ne pas publier la formule Homebrew avant d'avoir l'URL publique finale et le SHA256 final.
-- Ne pas compter sur GitHub Actions comme source d'archive canonique pour cette procedure. La build manuelle locale est la reference.
-- Annuler toute run `release.yml` declenchee par le tag si l'on suit ce runbook manuel.
+- La build manuelle locale est l'unique source d'archive canonique; il n'existe plus de build GitHub Actions.
 - Le tap public et le depot source sont deux depots distincts; chacun doit etre committe et pousse separement.
 - La build PyInstaller peut generer `build/` et `speekify.spec`; ces artefacts sont locaux et ne doivent pas etre commites.
 - Utiliser les URLs `OtterlySpaceLabs/...`, pas les anciennes URLs `hiboux/...`.

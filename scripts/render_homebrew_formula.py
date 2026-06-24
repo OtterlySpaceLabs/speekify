@@ -35,7 +35,10 @@ def render_formula(*, version: str, url: str, sha256: str, homepage: str) -> str
         f'  version "{version}"\n'
         "\n"
         "  def install\n"
-        '    bin.install "speekify"\n'
+        "    # onedir build: the launcher needs its sibling _internal/ folder,\n"
+        "    # so install the whole dir into libexec and symlink the launcher.\n"
+        '    libexec.install "speekify"\n'
+        '    bin.install_symlink libexec/"speekify/speekify"\n'
         '    man1.install "share/man/man1/speekify.1"\n'
         "  end\n"
         "\n"
