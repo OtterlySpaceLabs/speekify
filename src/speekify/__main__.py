@@ -75,7 +75,7 @@ GENERATION_HELP = (
     + _build_cli_epilog()
 )
 SETUP_HELP = "Download and warm up the models used by Speekify."
-INSPECT_HELP = "Preview extraction, translation, tagging, and output naming without synthesis."
+INSPECT_HELP = "Preview extraction, translation, and output naming without synthesis."
 
 
 def _parse_language_code(value: str) -> str:
@@ -191,39 +191,11 @@ DryRunOption = Annotated[
     bool,
     typer.Option("--dry-run", help="Preview the generation plan without loading the speech model."),
 ]
-TagsOption = Annotated[
-    bool,
-    typer.Option(
-        "--tags/--no-tags",
-        help="Add sparse Supertonic inline speech tags such as <breath>.",
-    ),
-]
-TagSentimentOption = Annotated[
-    bool,
-    typer.Option(
-        "--tag-sentiment/--no-tag-sentiment",
-        help="Use CardiffNLP sentiment signals when placing speech tags.",
-    ),
-]
-TagSighOption = Annotated[
-    bool,
-    typer.Option(
-        "--tag-sigh/--no-tag-sigh",
-        help="Allow very rare <sigh> tags when sentiment and rules strongly agree.",
-    ),
-]
 SkipTranslationOption = Annotated[
     bool,
     typer.Option(
         "--skip-translation",
         help="Do not warm up the English-to-French translation model.",
-    ),
-]
-SkipSentimentOption = Annotated[
-    bool,
-    typer.Option(
-        "--skip-sentiment",
-        help="Do not warm up the CardiffNLP emotion/sentiment model.",
     ),
 ]
 
@@ -262,9 +234,6 @@ def generation_command(
     english_islands: EnglishIslandsOption = True,
     english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
-    tags: TagsOption = True,
-    tag_sentiment: TagSentimentOption = True,
-    tag_sigh: TagSighOption = True,
     dry_run: DryRunOption = False,
     verbose: VerboseOption = False,
 ) -> int:
@@ -283,9 +252,6 @@ def generation_command(
             english_islands=english_islands,
             english_lexicon_path=english_lexicon_path,
             output_dir=output_dir,
-            tags=tags,
-            tag_sentiment=tag_sentiment,
-            tag_sigh=tag_sigh,
             verbose=verbose,
         )
     return _run_generation(
@@ -302,9 +268,6 @@ def generation_command(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        tags=tags,
-        tag_sentiment=tag_sentiment,
-        tag_sigh=tag_sigh,
         verbose=verbose,
     )
 
@@ -324,9 +287,6 @@ def inspect_command(
     english_islands: EnglishIslandsOption = True,
     english_lexicon_path: EnglishLexiconPathOption = None,
     output_dir: OutputDirOption = None,
-    tags: TagsOption = True,
-    tag_sentiment: TagSentimentOption = True,
-    tag_sigh: TagSighOption = True,
     verbose: VerboseOption = False,
 ) -> int:
     return _run_inspection(
@@ -343,9 +303,6 @@ def inspect_command(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        tags=tags,
-        tag_sentiment=tag_sentiment,
-        tag_sigh=tag_sigh,
         verbose=verbose,
     )
 
@@ -353,12 +310,10 @@ def inspect_command(
 @setup_app.command(help=SETUP_HELP)
 def setup_command(
     skip_translation: SkipTranslationOption = False,
-    skip_sentiment: SkipSentimentOption = False,
     verbose: VerboseOption = False,
 ) -> int:
     return _run_setup(
         skip_translation=skip_translation,
-        skip_sentiment=skip_sentiment,
         verbose=verbose,
     )
 
@@ -414,9 +369,6 @@ def _run_generation(
     english_islands: bool,
     english_lexicon_path: Path | None,
     output_dir: Path | None,
-    tags: bool,
-    tag_sentiment: bool,
-    tag_sigh: bool,
     verbose: bool,
 ) -> int:
     source_text = _read_source(source)
@@ -434,9 +386,6 @@ def _run_generation(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        tags=tags,
-        tag_sentiment=tag_sentiment,
-        tag_sigh=tag_sigh,
     )
     logger, log_path = configure_logger(verbose=verbose)
     request = _build_cli_request(
@@ -483,9 +432,6 @@ def _run_inspection(
     english_islands: bool,
     english_lexicon_path: Path | None,
     output_dir: Path | None,
-    tags: bool,
-    tag_sentiment: bool,
-    tag_sigh: bool,
     verbose: bool,
 ) -> int:
     source_text = _read_source(source)
@@ -503,9 +449,6 @@ def _run_inspection(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        tags=tags,
-        tag_sentiment=tag_sentiment,
-        tag_sigh=tag_sigh,
     )
     logger, log_path = configure_logger(verbose=verbose)
     request = _build_cli_request(
@@ -537,21 +480,17 @@ def _run_inspection(
     return 0
 
 
-def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -> int:
+def _run_setup(*, skip_translation: bool, verbose: bool) -> int:
     logger, log_path = configure_logger(verbose=verbose)
     synthesizer = _build_synthesizer()
     translator = _build_translator()
-    sentiment_analyzer = _build_sentiment_analyzer()
     include_translation = not skip_translation
-    include_sentiment = not skip_sentiment
 
     try:
         _warm_up_models(
             synthesizer=synthesizer,
             translator=translator,
-            sentiment_analyzer=sentiment_analyzer,
             include_translation=include_translation,
-            include_sentiment=include_sentiment,
             logger=logger,
         )
     except Exception as exc:
@@ -561,7 +500,6 @@ def _run_setup(*, skip_translation: bool, skip_sentiment: bool, verbose: bool) -
 
     _render_setup_success(
         include_translation=include_translation,
-        include_sentiment=include_sentiment,
         log_path=log_path if verbose else None,
     )
     return 0
@@ -584,9 +522,6 @@ def _apply_user_config_options(**options: Any) -> dict[str, Any]:
         "english_islands": user_config.english_islands,
         "english_lexicon_path": user_config.english_lexicon_path,
         "output_dir": user_config.output_dir,
-        "tags": user_config.tags,
-        "tag_sentiment": user_config.tag_sentiment,
-        "tag_sigh": user_config.tag_sigh,
     }
     return {
         name: _option_with_config(name, value, configured_options.get(name))
@@ -627,9 +562,6 @@ def _build_cli_request(
         english_islands=options["english_islands"],
         english_lexicon_path=options["english_lexicon_path"],
         output_dir=options["output_dir"] or Path.cwd(),
-        tags=options["tags"],
-        tag_sentiment=options["tag_sentiment"],
-        tag_sigh=options["tag_sigh"],
         use_user_config=False,
     )
 
@@ -691,7 +623,6 @@ def _doctor_model_checks() -> tuple[tuple[str, Callable[[], object]], ...]:
     return (
         ("Supertonic model", lambda: getattr(_build_synthesizer(), "engine")),
         ("Translation model", lambda: getattr(_build_translator(), "backend")),
-        ("Emotion model", lambda: getattr(_build_sentiment_analyzer(), "backend")),
     )
 
 
@@ -744,19 +675,11 @@ def _build_translator() -> object:
     return HuggingFaceTranslator()
 
 
-def _build_sentiment_analyzer() -> object:
-    from speekify.dependencies import build_sentiment_analyzer
-
-    return build_sentiment_analyzer()
-
-
 def _warm_up_models(
     *,
     synthesizer: object,
     translator: object,
-    sentiment_analyzer: object,
     include_translation: bool,
-    include_sentiment: bool,
     logger: logging.Logger,
 ) -> None:
     from speekify.setup import warm_up_models
@@ -764,9 +687,7 @@ def _warm_up_models(
     warm_up_models(
         synthesizer=synthesizer,
         translator=translator,
-        sentiment_analyzer=sentiment_analyzer,
         include_translation=include_translation,
-        include_sentiment=include_sentiment,
         logger=logger,
     )
 

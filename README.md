@@ -25,7 +25,7 @@ mv speekify /usr/local/bin/speekify
 speekify setup
 ```
 
-`speekify setup` downloads and warms the Supertonic model, the CardiffNLP emotion/sentiment model used by default speech tagging, and, by default, the English to French translation model too.
+`speekify setup` downloads and warms the Supertonic model and, by default, the English to French translation model too.
 
 ### From source with uv
 
@@ -110,19 +110,12 @@ uv run speekify --speed 1.2 --steps 20 "Hello world"
 speekify --lang fr --voice M5 --speed 0.98 --steps 10 --silence-duration 0.25 https://example.com/article
 uv run speekify --max-chunk-length 240 --silence-duration 0.25 "Hello world"
 
-# Control sparse inline speech tags and emotion tagging
-speekify --no-tags "Hello world"
-uv run speekify --no-tag-sentiment --no-tag-sigh --lang fr https://example.com/article
-
 # Download and warm up models
 speekify setup
 uv run speekify setup
 
 speekify setup --skip-translation   # skip the EN→FR translation model
 uv run speekify setup --skip-translation
-
-speekify setup --skip-sentiment     # skip the emotion/sentiment model
-uv run speekify setup --skip-sentiment
 
 # Show technical diagnostics when needed
 speekify --verbose "Hello world"
@@ -162,9 +155,6 @@ speed = 0.98
 steps = 10
 silence_duration = 0.25
 output_dir = "~/Speekify/audio"
-tags = true
-tag_sentiment = true
-tag_sigh = true
 english_islands = true
 # english_lexicon_path = "~/Speekify/english-terms.txt"
 ```
@@ -186,10 +176,7 @@ english_islands = true
 | `--url` | — | Force URL extraction mode even if the source looks like plain text. |
 | `--title TEXT` | *(auto)* | Override the output file name (without extension). |
 | `--output-dir PATH` | `.` (current directory) | Directory where the WAV file is written. |
-| `--dry-run` | disabled | Preview extraction, translation, tags, and planned output paths without generating audio. |
-| `--tags / --no-tags` | `--tags` | Add sparse Supertonic inline speech tags, mainly `<breath>`. |
-| `--tag-sentiment / --no-tag-sentiment` | `--tag-sentiment` | Use CardiffNLP sentiment signals when placing speech tags. Falls back to rules if unavailable. |
-| `--tag-sigh / --no-tag-sigh` | `--tag-sigh` | Allow very rare `<sigh>` tags when sentiment and rules strongly agree. |
+| `--dry-run` | disabled | Preview extraction, translation, and planned output paths without generating audio. |
 | `--verbose` | disabled | Show technical diagnostics such as the log file path when a command fails. |
 | `--version`, `-v` | — | Print the installed Speekify version and exit. |
 
@@ -267,9 +254,6 @@ Releases are built and published entirely locally — there is no GitHub Actions
 - The app uses `supertonic-3` by default.
 - The direct CLI defaults to French narration (`fr`) with voice `M5`, speed `0.98`, `10` synthesis steps, and `0.25 s` chunk silence. It accepts only Supertonic-supported ISO 639-1 language codes such as `en`, `fr`, `ja` or `ko`, plus `na` for language-agnostic synthesis.
 - When French synthesis is used, including the default, English inputs are auto-detected and translated to French before TTS with `Helsinki-NLP/opus-mt-en-fr`.
-- Speech tagging runs after optional translation and before synthesis, so tags apply to the final TTS text. By default it combines rules-based `<breath>` placement with CardiffNLP sentiment and rare `<sigh>` tags. Use `--no-tag-sentiment --no-tag-sigh` for rules-only tagging.
-- `speekify setup` warms the CardiffNLP sentiment model used by the default emotion tagging. Use `setup --skip-sentiment` only if you want to skip that download during setup.
-- `<breath>` is the primary inline tag. `<sigh>` is enabled by default but remains rare and capped.
 - URL mode extracts readable body text rather than raw HTML.
 - X/Twitter extraction only works for public posts exposed through the public oEmbed endpoint. X articles, protected accounts, and posts whose text is too short are reported as extraction errors because they would require a logged-in session.
 - A single URL is auto-detected and extracted unless `--url` is needed to force URL mode.

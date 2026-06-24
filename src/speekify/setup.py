@@ -12,23 +12,15 @@ def warm_up_models(
     *,
     synthesizer: object,
     translator: object,
-    sentiment_analyzer: object,
     include_translation: bool,
-    include_sentiment: bool,
     logger: logging.Logger,
 ) -> None:
-    logger.info(
-        "Warmup started include_translation=%s include_sentiment=%s",
-        include_translation,
-        include_sentiment,
-    )
+    logger.info("Warmup started include_translation=%s", include_translation)
     warmups: list[tuple[str, Callable[[], object]]] = [
         ("Supertonic model", lambda: getattr(synthesizer, "engine")),
     ]
     if include_translation:
         warmups.append(("Translation model", lambda: getattr(translator, "backend")))
-    if include_sentiment:
-        warmups.append(("Emotion model", lambda: getattr(sentiment_analyzer, "backend")))
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -44,8 +36,4 @@ def warm_up_models(
             load_model()
             progress.advance(task_id)
 
-    logger.info(
-        "Warmup finished include_translation=%s include_sentiment=%s",
-        include_translation,
-        include_sentiment,
-    )
+    logger.info("Warmup finished include_translation=%s", include_translation)

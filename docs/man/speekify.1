@@ -110,15 +110,6 @@ Write the generated WAV file into a specific directory.
 .B --dry-run
 Inspect the generation plan without creating audio.
 .TP
-.B --tags / --no-tags
-Enable or disable sparse inline speech tags.
-.TP
-.B --tag-sentiment / --no-tag-sentiment
-Enable or disable CardiffNLP sentiment-assisted tagging.
-.TP
-.B --tag-sigh / --no-tag-sigh
-Enable or disable rare sigh tags.
-.TP
 .B --verbose
 Show technical diagnostics such as the log file path.
 .TP
@@ -141,9 +132,6 @@ Show the command help and exit.
 .B --skip-translation
 Do not warm up the English to French translation model.
 .TP
-.B --skip-sentiment
-Do not warm up the CardiffNLP emotion and sentiment model.
-.TP
 .B --verbose
 Show technical diagnostics such as the log file path.
 .TP
@@ -154,7 +142,7 @@ Show setup help and exit.
 .SH INSPECT OPTIONS
 .TP
 .B speekify inspect
-Accepts the same source, URL, language, voice, chunking, tagging, and output options as the main generation command, but does not synthesize or write a WAV file.
+Accepts the same source, URL, language, voice, chunking, and output options as the main generation command, but does not synthesize or write a WAV file.
 .SH MCP SERVER
 The
 .B speekify mcp

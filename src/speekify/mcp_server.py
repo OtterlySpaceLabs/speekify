@@ -56,9 +56,6 @@ async def generate_wav(
     english_islands: bool = True,
     english_lexicon_path: str | None = None,
     output_dir: str | None = None,
-    tags: bool = True,
-    tag_sentiment: bool = True,
-    tag_sigh: bool = True,
     use_user_config: bool = True,
     verbose: bool = False,
 ) -> dict[str, object]:
@@ -77,9 +74,6 @@ async def generate_wav(
         english_islands=english_islands,
         english_lexicon_path=english_lexicon_path,
         output_dir=output_dir,
-        tags=tags,
-        tag_sentiment=tag_sentiment,
-        tag_sigh=tag_sigh,
         use_user_config=use_user_config,
     )
     logger, log_path = configure_logger(verbose=verbose)
@@ -131,9 +125,6 @@ def create_mcp_server() -> Any:
         english_islands: bool = True,
         english_lexicon_path: str | None = None,
         output_dir: str | None = None,
-        tags: bool = True,
-        tag_sentiment: bool = True,
-        tag_sigh: bool = True,
         use_user_config: bool = True,
     ) -> dict[str, object]:
         """Convert inline text, readable URL content, or a .txt/.md/.pdf file to a local WAV file."""
@@ -151,9 +142,6 @@ def create_mcp_server() -> Any:
             english_islands=english_islands,
             english_lexicon_path=english_lexicon_path,
             output_dir=output_dir,
-            tags=tags,
-            tag_sentiment=tag_sentiment,
-            tag_sigh=tag_sigh,
             use_user_config=use_user_config,
         )
 

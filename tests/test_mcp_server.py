@@ -38,9 +38,6 @@ def test_generation_request_normalizes_and_validates_options(tmp_path) -> None:
         english_islands=False,
         english_lexicon_path=str(tmp_path / "english.txt"),
         output_dir=str(tmp_path),
-        tags=True,
-        tag_sentiment=False,
-        tag_sigh=True,
     )
 
     assert request.source_text == "Bonjour le monde"
@@ -50,9 +47,6 @@ def test_generation_request_normalizes_and_validates_options(tmp_path) -> None:
     assert request.english_islands is False
     assert request.english_lexicon_path == tmp_path / "english.txt"
     assert request.output_dir == tmp_path
-    assert request.tagging_config.enabled is True
-    assert request.tagging_config.use_sentiment is False
-    assert request.tagging_config.enable_sigh is True
 
 
 @pytest.mark.parametrize(
@@ -78,9 +72,6 @@ def test_generation_request_rejects_invalid_mcp_inputs(field: str, value: str, m
         "english_islands": True,
         "english_lexicon_path": None,
         "output_dir": None,
-        "tags": True,
-        "tag_sentiment": True,
-        "tag_sigh": True,
     }
     kwargs[field] = value
 
@@ -184,7 +175,6 @@ def test_generation_request_can_use_user_config_defaults(tmp_path, monkeypatch) 
                 "english_islands = false",
                 f'english_lexicon_path = "{lexicon_path}"',
                 f'output_dir = "{output_dir}"',
-                "tags = false",
             ]
         ),
         encoding="utf-8",
@@ -205,9 +195,6 @@ def test_generation_request_can_use_user_config_defaults(tmp_path, monkeypatch) 
         english_islands=True,
         english_lexicon_path=None,
         output_dir=None,
-        tags=True,
-        tag_sentiment=True,
-        tag_sigh=True,
     )
 
     assert request.voice == "F1"
@@ -219,7 +206,6 @@ def test_generation_request_can_use_user_config_defaults(tmp_path, monkeypatch) 
     assert request.english_islands is False
     assert request.english_lexicon_path == lexicon_path
     assert request.output_dir == output_dir
-    assert request.tagging_config.enabled is False
 
 
 def test_create_mcp_server_registers_fastmcp_instance() -> None:

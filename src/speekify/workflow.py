@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -20,7 +20,6 @@ from speekify.config import (
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
 from speekify.extract_common import is_document_path_input, read_document
 from speekify.naming import build_output_path
-from speekify.tagging import SupertoneTagger, TaggingConfig
 from speekify.multilingual import load_english_lexicon
 from speekify.tts import PreparedText, SynthesisArtifact, SupertonicSynthesizer
 from speekify.translation import HuggingFaceTranslator, detect_language_code
@@ -40,7 +39,6 @@ class GenerationRequest:
     silence_duration: float = DEFAULT_SILENCE_DURATION
     english_islands: bool = True
     english_lexicon_path: Path | None = None
-    tagging_config: TaggingConfig = field(default_factory=TaggingConfig)
     title: str = ""
     is_url_mode: bool = False
     output_dir: Path = Path.cwd()
@@ -60,8 +58,6 @@ class GenerationInspection:
     content: ExtractedContent
     prepared_text: PreparedText
     source_mode: str
-    tag_counts: dict[str, int] = field(default_factory=dict)
-    sentiment_used: bool = False
     english_lexicon_terms: int = 0
 
 
@@ -175,7 +171,6 @@ async def generate_audio(
     *,
     synthesizer: SupertonicSynthesizer,
     translator: HuggingFaceTranslator,
-    tagger: SupertoneTagger | None = None,
     logger: logging.Logger,
     status_callback: StatusCallback | None = None,
 ) -> GenerationResult:
@@ -216,27 +211,6 @@ async def generate_audio(
         prepared_text.removed_character_count,
         prepared_text.removed_characters,
     )
-
-    if request.tagging_config.enabled:
-        _update_status(status_callback, "annotating text")
-        active_tagger = tagger or SupertoneTagger(config=request.tagging_config)
-        tagging_result = await asyncio.to_thread(
-            active_tagger.tag,
-            prepared_text.text,
-            language_code=language_code,
-        )
-        logger.info(
-            "Speech tags checked changed=%s counts=%s sentiment_used=%s",
-            tagging_result.changed,
-            dict(tagging_result.tag_counts),
-            tagging_result.sentiment_used,
-        )
-        if tagging_result.changed:
-            prepared_text = replace(
-                prepared_text,
-                text=tagging_result.text,
-                reformatted=True,
-            )
 
     output_title = request.title or content.best_title()
     output_path = build_output_path(request.output_dir, output_title)
@@ -287,7 +261,6 @@ async def inspect_generation(
     request: GenerationRequest,
     *,
     translator: HuggingFaceTranslator,
-    tagger: SupertoneTagger | None = None,
     logger: logging.Logger,
     status_callback: StatusCallback | None = None,
 ) -> GenerationInspection:
@@ -322,21 +295,6 @@ async def inspect_generation(
         removed_character_count=0,
     )
 
-    tag_counts: dict[str, int] = {}
-    sentiment_used = False
-    if request.tagging_config.enabled:
-        _update_status(status_callback, "annotating text")
-        active_tagger = tagger or SupertoneTagger(config=request.tagging_config)
-        tagging_result = await asyncio.to_thread(
-            active_tagger.tag,
-            prepared_text.text,
-            language_code=language_code,
-        )
-        tag_counts = dict(tagging_result.tag_counts)
-        sentiment_used = tagging_result.sentiment_used
-        if tagging_result.changed:
-            prepared_text = replace(prepared_text, text=tagging_result.text, reformatted=True)
-
     output_title = request.title or content.best_title()
     output_path = build_output_path(request.output_dir, output_title)
     _update_status(status_callback, "building preview")
@@ -352,8 +310,6 @@ async def inspect_generation(
         content=content,
         prepared_text=prepared_text,
         source_mode=_source_mode(request),
-        tag_counts=tag_counts,
-        sentiment_used=sentiment_used,
         english_lexicon_terms=len(english_lexicon_terms or ()),
     )
 

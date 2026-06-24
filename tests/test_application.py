@@ -10,7 +10,6 @@ from speekify.application import (
 )
 from speekify.dependencies import GenerationDependencies
 from speekify.extract import ExtractedContent
-from speekify.tagging import TaggingConfig
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationInspection, GenerationResult
 
@@ -30,9 +29,6 @@ def test_build_generation_request_normalizes_without_user_config(tmp_path) -> No
         english_islands=False,
         english_lexicon_path=str(tmp_path / "english.txt"),
         output_dir=str(tmp_path),
-        tags=True,
-        tag_sentiment=False,
-        tag_sigh=True,
         use_user_config=False,
     )
 
@@ -41,9 +37,6 @@ def test_build_generation_request_normalizes_without_user_config(tmp_path) -> No
     assert request.voice == "M1"
     assert request.language_code == "fr"
     assert request.output_dir == tmp_path
-    assert request.tagging_config.enabled is True
-    assert request.tagging_config.use_sentiment is False
-    assert request.tagging_config.enable_sigh is True
 
 
 def test_run_generation_uses_built_dependencies(monkeypatch, tmp_path) -> None:
@@ -86,22 +79,16 @@ def test_run_generation_uses_built_dependencies(monkeypatch, tmp_path) -> None:
         english_islands=True,
         english_lexicon_path=None,
         output_dir=str(tmp_path),
-        tags=True,
-        tag_sentiment=True,
-        tag_sigh=True,
         use_user_config=False,
     )
     logger = logging.getLogger("test-run-generation")
     synthesizer = object()
     translator = object()
-    tagger = object()
 
-    def fake_build_dependencies(tagging_config: TaggingConfig, *, cached: bool = False) -> GenerationDependencies:
-        assert tagging_config == request.tagging_config
+    def fake_build_dependencies(*, cached: bool = False) -> GenerationDependencies:
         return GenerationDependencies(
             synthesizer=synthesizer,
             translator=translator,
-            tagger=tagger,
         )
 
     monkeypatch.setattr("speekify.application.build_dependencies", fake_build_dependencies)
@@ -112,7 +99,6 @@ def test_run_generation_uses_built_dependencies(monkeypatch, tmp_path) -> None:
     assert captured["request"] is request
     assert captured["synthesizer"] is synthesizer
     assert captured["translator"] is translator
-    assert captured["tagger"] is tagger
     assert captured["logger"] is logger
 
 
@@ -153,21 +139,15 @@ def test_run_inspection_uses_built_dependencies(monkeypatch, tmp_path) -> None:
         english_islands=True,
         english_lexicon_path=None,
         output_dir=str(tmp_path),
-        tags=True,
-        tag_sentiment=False,
-        tag_sigh=False,
         use_user_config=False,
     )
     logger = logging.getLogger("test-run-inspection")
     translator = object()
-    tagger = object()
 
-    def fake_build_dependencies(tagging_config: TaggingConfig, *, cached: bool = False) -> GenerationDependencies:
-        assert tagging_config == request.tagging_config
+    def fake_build_dependencies(*, cached: bool = False) -> GenerationDependencies:
         return GenerationDependencies(
             synthesizer=object(),
             translator=translator,
-            tagger=tagger,
         )
 
     monkeypatch.setattr("speekify.application.build_dependencies", fake_build_dependencies)
@@ -177,5 +157,4 @@ def test_run_inspection_uses_built_dependencies(monkeypatch, tmp_path) -> None:
     assert result is expected_result
     assert captured["request"] is request
     assert captured["translator"] is translator
-    assert captured["tagger"] is tagger
     assert captured["logger"] is logger

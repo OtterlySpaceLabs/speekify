@@ -105,14 +105,6 @@ def render_inspection_success(inspection: Any, *, log_path: Path | None) -> None
     table.add_row("Planned file", str(inspection.output_path))
     table.add_row("Text characters", str(len(inspection.content.text)))
     table.add_row("Prepared characters", str(len(inspection.prepared_text.text)))
-    if inspection.tag_counts:
-        table.add_row(
-            "Tags",
-            ", ".join(f"{tag}: {count}" for tag, count in sorted(inspection.tag_counts.items())),
-        )
-    else:
-        table.add_row("Tags", "none")
-    table.add_row("Sentiment", "used" if inspection.sentiment_used else "not used")
     if inspection.english_lexicon_terms:
         table.add_row("English lexicon", str(inspection.english_lexicon_terms))
     if log_path is not None:
@@ -134,7 +126,6 @@ def render_inspection_success(inspection: Any, *, log_path: Path | None) -> None
 def render_setup_success(
     *,
     include_translation: bool,
-    include_sentiment: bool,
     log_path: Path | None,
 ) -> None:
     table = Table(show_header=False, box=box.SIMPLE, expand=False)
@@ -142,7 +133,6 @@ def render_setup_success(
     table.add_column("Status")
     table.add_row("Supertonic model", "ready")
     table.add_row("Translation model", "ready" if include_translation else "skipped")
-    table.add_row("Emotion model", "ready" if include_sentiment else "skipped")
     if log_path is not None:
         table.add_row("Log", str(log_path))
 
@@ -157,7 +147,6 @@ def render_setup_success(
     )
     console.print("Supertonic model ready.", style="green")
     console.print("Translation model ready." if include_translation else "Translation model skipped.", style="green" if include_translation else "yellow")
-    console.print("Emotion model ready." if include_sentiment else "Emotion model skipped.", style="green" if include_sentiment else "yellow")
 
 
 def render_doctor_report(report: Sequence[tuple[str, str, str]]) -> None:

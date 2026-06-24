@@ -14,7 +14,6 @@ from speekify.config import (
     DEFAULT_VOICE,
 )
 from speekify.dependencies import build_dependencies
-from speekify.tagging import TaggingConfig
 from speekify.user_config import UserConfig, config_value, load_user_config
 from speekify.validation import (
     normalize_language_code,
@@ -32,14 +31,6 @@ from speekify.workflow import (
 _GENERATION_LOCK: asyncio.Lock | None = None
 
 
-def build_tagging_config(*, enabled: bool, use_sentiment: bool, enable_sigh: bool) -> TaggingConfig:
-    return TaggingConfig(
-        enabled=enabled,
-        use_sentiment=enabled and use_sentiment,
-        enable_sigh=enabled and enable_sigh,
-    )
-
-
 def build_generation_request(
     *,
     source_text: str,
@@ -55,9 +46,6 @@ def build_generation_request(
     english_islands: bool,
     english_lexicon_path: str | Path | None,
     output_dir: str | Path | None,
-    tags: bool,
-    tag_sentiment: bool,
-    tag_sigh: bool,
     use_user_config: bool = True,
 ) -> GenerationRequest:
     user_config = load_user_config() if use_user_config else UserConfig()
@@ -79,9 +67,6 @@ def build_generation_request(
         user_config.english_lexicon_path,
     )
     output_dir = config_value(output_dir, None, user_config.output_dir)
-    tags = config_value(tags, True, user_config.tags)
-    tag_sentiment = config_value(tag_sentiment, True, user_config.tag_sentiment)
-    tag_sigh = config_value(tag_sigh, True, user_config.tag_sigh)
 
     return GenerationRequest(
         source_text=normalize_source_text(source_text),
@@ -97,11 +82,6 @@ def build_generation_request(
         title=title.strip(),
         is_url_mode=is_url_mode,
         output_dir=_expand_path(output_dir) or Path.cwd(),
-        tagging_config=build_tagging_config(
-            enabled=tags,
-            use_sentiment=tag_sentiment,
-            enable_sigh=tag_sigh,
-        ),
     )
 
 
@@ -112,7 +92,7 @@ async def run_generation(
     status_callback: Callable[[str], None] | None = None,
     cached: bool = False,
 ) -> GenerationResult:
-    dependencies = build_dependencies(request.tagging_config, cached=cached)
+    dependencies = build_dependencies(cached=cached)
     # ponytail: cached mode shares one set of models across MCP calls; serialize them.
     lock = _generation_lock() if cached else contextlib.nullcontext()
     async with lock:
@@ -120,7 +100,6 @@ async def run_generation(
             request,
             synthesizer=dependencies.synthesizer,
             translator=dependencies.translator,
-            tagger=dependencies.tagger,
             logger=logger,
             status_callback=status_callback,
         )
@@ -133,11 +112,10 @@ async def run_inspection(
     status_callback: Callable[[str], None] | None = None,
     cached: bool = False,
 ) -> GenerationInspection:
-    dependencies = build_dependencies(request.tagging_config, cached=cached)
+    dependencies = build_dependencies(cached=cached)
     return await inspect_generation(
         request,
         translator=dependencies.translator,
-        tagger=dependencies.tagger,
         logger=logger,
         status_callback=status_callback,
     )

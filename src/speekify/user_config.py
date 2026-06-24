@@ -26,9 +26,6 @@ class UserConfig:
     english_islands: bool | None = None
     english_lexicon_path: Path | None = None
     output_dir: Path | None = None
-    tags: bool | None = None
-    tag_sentiment: bool | None = None
-    tag_sigh: bool | None = None
 
 
 def default_config_path() -> Path:
@@ -67,9 +64,6 @@ def load_user_config(path: Path | None = None) -> UserConfig:
         english_islands=_optional_bool(generation.get("english_islands"), "english_islands"),
         english_lexicon_path=_optional_path(generation.get("english_lexicon_path")),
         output_dir=_optional_path(generation.get("output_dir")),
-        tags=_optional_bool(generation.get("tags"), "tags"),
-        tag_sentiment=_optional_bool(generation.get("tag_sentiment"), "tag_sentiment"),
-        tag_sigh=_optional_bool(generation.get("tag_sigh"), "tag_sigh"),
     )
 
 
