@@ -55,7 +55,10 @@ packages = ["src/speekify"]
 "docs/man/speekify.1" = "share/man/man1/speekify.1"
 
 [tool.hatch.build.targets.sdist]
+# include is an allowlist: without src/speekify the sdist drops the package and
+# the wheel built from it is empty (check-wheel-contents W007).
 include = [
+  "src/speekify",
   "docs/man/speekify.1",
 ]
 
