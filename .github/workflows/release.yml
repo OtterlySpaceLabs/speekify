@@ -1,0 +1,66 @@
+name: Release macOS binary + Homebrew formula
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: Build macOS binary and update formula
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+
+      - name: Build standalone macOS binary
+        run: ./scripts/build_standalone_macos.sh
+
+      - name: Collect release vars
+        id: vars
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          arch="$(uname -m)"
+          archive="dist/speekify-macos-${arch}.tar.gz"
+          sha="$(shasum -a 256 "$archive" | awk '{print $1}')"
+          {
+            echo "version=$version"
+            echo "arch=$arch"
+            echo "archive=$archive"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Attach binary to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "${{ steps.vars.outputs.archive }}" --clobber
+
+      - name: Render Homebrew formula
+        run: |
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/speekify-macos-${{ steps.vars.outputs.arch }}.tar.gz"
+          python3 scripts/render_homebrew_formula.py \
+            --version "${{ steps.vars.outputs.version }}" \
+            --url "$url" \
+            --sha256 "${{ steps.vars.outputs.sha }}" \
+            --homepage "https://github.com/${GITHUB_REPOSITORY}" \
+            --output "$RUNNER_TEMP/speekify.rb"
+
+      - name: Commit formula to main
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+          mkdir -p Formula
+          cp "$RUNNER_TEMP/speekify.rb" Formula/speekify.rb
+          git add Formula/speekify.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date."
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "chore(release): update Homebrew formula to ${{ steps.vars.outputs.version }}"
+            git push origin main
+          fi

@@ -26,7 +26,7 @@ models download automatically on first use.
 Once a release is published, install the standalone binary via Homebrew:
 
 ```bash
-brew tap OtterlySpaceLabs/speekify
+brew tap otterlyspacelabs/speekify https://github.com/OtterlySpaceLabs/speekify
 brew install speekify
 speekify setup
 ```
@@ -34,7 +34,7 @@ speekify setup
 Or download the archive directly:
 
 ```bash
-curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/latest/download/speekify-macos-arm64.tar.gz
+curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/speekify/releases/latest/download/speekify-macos-arm64.tar.gz
 tar -xzf speekify.tar.gz
 mv speekify /usr/local/bin/speekify
 speekify setup

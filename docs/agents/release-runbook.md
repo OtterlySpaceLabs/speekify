@@ -1,381 +1,144 @@
 # Release Runbook
 
-## 1. Objectif du document
+## 1. Objectif
 
-Ce document est le runbook operationnel de reference pour publier une nouvelle version de Speekify.
+Runbook operationnel pour publier une nouvelle version de Speekify.
 
-Il doit permettre a un futur agent IA d'executer la release de bout en bout avec seulement:
+Depuis la migration vers la CI GitHub, la release est **construite et publiee par
+GitHub Actions**, pas en local. Le workflow `.github/workflows/release.yml` se
+declenche a la publication d'une Release GitHub et:
 
-- le numero de version cible
-- la branche de travail
-- les notes de version a publier, si elles ne peuvent pas etre derivees des commits
+- construit le binaire macOS standalone (`--onedir`) sur un runner `macos-latest`
+- attache `speekify-macos-arm64.tar.gz` a la Release
+- regenere `Formula/speekify.rb` et le committe sur `main`
 
-Le workflow canonique de ce depot est un workflow manuel, reproductible, construit
-**entierement en local** sur macOS, puis publie dans deux depots GitHub. Il n'y a
-plus de build GitHub Actions: le workflow `.github/workflows/release.yml` a ete
-supprime, donc aucun run ne se declenche au push de tag et il n'y a plus rien a
-annuler.
+Le depot est desormais **public et unique** (`OtterlySpaceLabs/speekify`): le tap
+Homebrew vit dans ce depot (`Formula/`), il n'y a plus de depot Homebrew separe
+ni de build local.
 
-- le depot source prive `OtterlySpaceLabs/speekify`
-- le depot Homebrew public `OtterlySpaceLabs/homebrew-speekify`
+Un agent execute la release avec seulement:
 
-L'asset public distribue aux utilisateurs et a Homebrew doit toujours provenir de la release publique du tap Homebrew, pas de la release privee du depot source.
+- le numero de version cible (`VERSION`, ex. `0.2.0`)
+- la branche de travail (`WORK_BRANCH`, defaut `main`)
+- les notes de version
 
-## 2. Informations requises avant de commencer
+Si aucune note n'est fournie, deriver un resume concis a partir des commits depuis
+le tag precedent.
 
-Renseigner ces variables avant toute action:
+## 2. Prerequis
 
-- `VERSION`: numero de version cible, par exemple `0.0.3`
-- `WORK_BRANCH`: branche source a publier, par defaut `main`
-- `SOURCE_RELEASE_NOTES`: note de release concise, orientee utilisateur, pour la release du depot source
-
-Informations derives automatiquement a partir de `VERSION`:
-
-- `TAG=v${VERSION}`
-- `TAP_RELEASE_TAG=speekify-v${VERSION}`
-- `SOURCE_RELEASE_TITLE=Speekify v${VERSION}`
-- `TAP_RELEASE_TITLE=Speekify v${VERSION}`
-
-Si aucune note de version n'est fournie, l'agent doit deriver un resume concis a partir des commits depuis le tag precedent, puis le faire valider si le resultat est ambigu.
-
-## 3. Prerequis techniques
-
-- Machine macOS avec la meme architecture que l'archive publiee, actuellement `arm64`
-- Acces en lecture/ecriture aux deux depots GitHub
 - `gh` authentifie avec le scope `repo`
-- `uv`, `git`, `curl`, `tar`, `shasum` et `brew` installes localement
-- Depot source ouvert a sa racine
-- Depot Homebrew disponible localement dans le dossier parent, sous `../homebrew-speekify`
-- Worktrees propres, hors artefacts ignores
+- `uv` et `git` en local (pour le bump de version et les tests)
+- Worktree propre
 
-Commandes de verification:
+Verification:
 
 ```bash
 gh auth status
-cd /path/to/speekify
-test -d ../homebrew-speekify
-git status --short
-cd ../homebrew-speekify
 git status --short
 ```
 
-## 4. Etapes de preparation
+## 3. Fichiers a mettre a jour avant la release
 
-Depuis la racine du depot source, definir les variables de travail:
+- `pyproject.toml` : champ `[project].version`
+- `uv.lock` : entree `[[package]]` du package local `speekify`
+- `README.md` / docs : seulement si le comportement utilisateur a change
 
-```bash
-export VERSION="0.0.3"
-export WORK_BRANCH="main"
-export TAG="v${VERSION}"
-export SOURCE_REPO="$PWD"
-export TAP_REPO="$(cd .. && pwd)/homebrew-speekify"
-export ARCH="$(uname -m)"
-export ARCHIVE_NAME="speekify-macos-${ARCH}.tar.gz"
-export ARCHIVE_PATH="$SOURCE_REPO/dist/${ARCHIVE_NAME}"
-export TAP_RELEASE_TAG="speekify-v${VERSION}"
-export SOURCE_RELEASE_TITLE="Speekify v${VERSION}"
-export TAP_RELEASE_TITLE="Speekify v${VERSION}"
-export TAP_RELEASE_NOTES="Public binary release for Homebrew install"
-export PUBLIC_ASSET_URL="https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/${TAP_RELEASE_TAG}/${ARCHIVE_NAME}"
-export RELEASE_NOTES_FILE="$SOURCE_REPO/dist/release-notes-${VERSION}.md"
-```
+`Formula/speekify.rb` n'est **pas** edite a la main : la CI le regenere.
 
-Creer le fichier de notes de release source:
-
-```bash
-mkdir -p "$SOURCE_REPO/dist"
-cat > "$RELEASE_NOTES_FILE" <<'EOF'
-<remplacer par des notes de release courtes, concretes et orientees utilisateur>
-EOF
-```
-
-Verifier aussi le tag precedent, utile pour revoir les changements inclus:
-
-```bash
-git --no-pager tag --list
-git --no-pager log --oneline --decorate "$(git describe --tags --abbrev=0)..HEAD"
-```
-
-## 5. Fichiers a mettre a jour
-
-Mettre a jour ces fichiers dans le depot source avant toute publication:
-
-- `pyproject.toml`: champ `[project].version`
-- `uv.lock`: entree `[[package]]` du package local `speekify`
-
-Mettre a jour ces fichiers seulement si le comportement visible par l'utilisateur a change:
-
-- `README.md`
-- documentation utilisateur ou notes techniques liees a la release
-
-Le fichier du tap Homebrew n'est pas edite a la main au debut du workflow. Il est regenere plus tard par script:
-
-- `../homebrew-speekify/Formula/speekify.rb`
-
-Controles apres edition:
+Controle:
 
 ```bash
 rg -n "version = \"${VERSION}\"" pyproject.toml uv.lock
-uv run python -c "import importlib.metadata as m; print(m.version('speekify'))"
 ```
 
-## 6. Commandes a executer
-
-Sequence complete a executer, dans cet ordre:
+## 4. Etapes
 
 ```bash
-cd "$SOURCE_REPO"
+export VERSION="0.2.0"
+export WORK_BRANCH="main"
+export TAG="v${VERSION}"
+
+# 1. Validation locale
 uv sync --group dev
 uv run pytest
 uv run ruff check .
 
+# 2. Bump + push
 git add pyproject.toml uv.lock
-# Ajouter explicitement ici tout autre fichier voulu pour cette release.
-git commit -m "Bump version to ${VERSION}"
+git commit -m "chore(release): bump version to ${VERSION}"
 git push origin "$WORK_BRANCH"
 
-./scripts/build_standalone_macos.sh
-SHA256="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
-
+# 3. Tag + Release (declenche publish.yml ET release.yml)
 git tag "$TAG"
 git push origin "$TAG"
-
-# Aucun workflow ne se declenche au push de tag (release.yml a ete supprime).
-
-GH_PAGER=cat gh release create "$TAG" "$ARCHIVE_PATH" \
-  --repo OtterlySpaceLabs/speekify \
-  --title "$SOURCE_RELEASE_TITLE" \
-  --notes-file "$RELEASE_NOTES_FILE"
-
-GH_PAGER=cat gh release create "$TAP_RELEASE_TAG" "$ARCHIVE_PATH" \
-  --repo OtterlySpaceLabs/homebrew-speekify \
-  --title "$TAP_RELEASE_TITLE" \
-  --notes "$TAP_RELEASE_NOTES"
-
-uv run python scripts/render_homebrew_formula.py \
-  --version "$VERSION" \
-  --url "$PUBLIC_ASSET_URL" \
-  --sha256 "$SHA256" \
-  --homepage https://github.com/OtterlySpaceLabs/speekify \
-  --output "$TAP_REPO/Formula/speekify.rb"
-
-cd "$TAP_REPO"
-git add Formula/speekify.rb
-git commit -m "Update speekify formula to ${VERSION}"
-git push origin main
+GH_PAGER=cat gh release create "$TAG" \
+  --title "Speekify v${VERSION}" \
+  --notes "<notes de release>"
 ```
 
-## 7. Verifications locales
+La publication de la Release declenche :
 
-Avant toute publication distante, les verifications locales minimales sont:
+- `publish.yml` → build wheel/sdist + publication PyPI
+- `release.yml` → build macOS + upload de l'archive + commit de `Formula/speekify.rb` sur `main`
+
+Aucune action macOS locale n'est requise.
+
+## 5. Suivi de la CI
 
 ```bash
-cd "$SOURCE_REPO"
-uv run pytest
-uv run ruff check .
-test -f "$ARCHIVE_PATH"
-shasum -a 256 "$ARCHIVE_PATH"
-# Build --onedir: le lanceur est dans le dossier dist/speekify/, pas dist/speekify.
-./dist/speekify/speekify --help >/dev/null
-./dist/speekify/speekify setup --help >/dev/null
+GH_PAGER=cat gh run list --workflow release.yml --limit 1
+GH_PAGER=cat gh run watch <run-id>
 ```
 
-Resultat attendu:
+Resultat attendu :
 
-- les tests passent
-- Ruff passe
-- l'archive existe dans `dist/`
-- le binaire local repond a `--help` et `setup --help`
+- `publish.yml` vert (PyPI)
+- `release.yml` vert : archive attachee a la Release, `Formula/speekify.rb` mis a
+  jour sur `main` (nouveau commit `chore(release): update Homebrew formula ...`)
 
-## 8. Commit de release
-
-Le commit de release dans le depot source doit contenir au minimum le bump de version.
-
-Commande standard:
+## 6. Verifications post-publication
 
 ```bash
-cd "$SOURCE_REPO"
-git add pyproject.toml uv.lock
-git commit -m "Bump version to ${VERSION}"
-git push origin "$WORK_BRANCH"
-```
+GH_PAGER=cat gh release view "$TAG"
 
-Si des changements de documentation ou de comportement utilisateur font partie de la release, ils peuvent etre inclus dans le meme commit si cela reste lisible et volontaire.
-
-## 9. Creation du tag de version
-
-Creer le tag local uniquement apres:
-
-- un `main` pousse
-- une build locale reussie
-- un SHA256 connu
-
-Commandes:
-
-```bash
-cd "$SOURCE_REPO"
-git tag "$TAG"
-git push origin "$TAG"
-```
-
-Le depot source ne possede plus de workflow GitHub Actions: `release.yml` a ete
-supprime. Le push de tag ne declenche donc aucun build et il n'y a aucun run a
-annuler. Toute la build et la publication se font en local.
-
-## 10. Push vers le depot distant
-
-Les pushes distants a effectuer pendant une release sont:
-
-1. push de la branche source:
-
-```bash
-cd "$SOURCE_REPO"
-git push origin "$WORK_BRANCH"
-```
-
-2. push du tag source:
-
-```bash
-git push origin "$TAG"
-```
-
-3. push de la formule dans le tap Homebrew:
-
-```bash
-cd "$TAP_REPO"
-git push origin main
-```
-
-Ne jamais considerer la release terminee tant que les deux depots n'ont pas recu leur push respectif.
-
-## 11. Publication ou declenchement de la release
-
-La publication canonique est manuelle et se fait en quatre sous-etapes:
-
-1. construire localement l'archive avec `./scripts/build_standalone_macos.sh`
-2. creer la release source privee `vX.Y.Z` dans `OtterlySpaceLabs/speekify`
-3. creer la release publique `speekify-vX.Y.Z` dans `OtterlySpaceLabs/homebrew-speekify`
-4. regenerer puis publier la formule Homebrew
-
-Commandes de publication:
-
-```bash
-cd "$SOURCE_REPO"
-GH_PAGER=cat gh release create "$TAG" "$ARCHIVE_PATH" \
-  --repo OtterlySpaceLabs/speekify \
-  --title "$SOURCE_RELEASE_TITLE" \
-  --notes-file "$RELEASE_NOTES_FILE"
-
-GH_PAGER=cat gh release create "$TAP_RELEASE_TAG" "$ARCHIVE_PATH" \
-  --repo OtterlySpaceLabs/homebrew-speekify \
-  --title "$TAP_RELEASE_TITLE" \
-  --notes "$TAP_RELEASE_NOTES"
-
-uv run python scripts/render_homebrew_formula.py \
-  --version "$VERSION" \
-  --url "$PUBLIC_ASSET_URL" \
-  --sha256 "$SHA256" \
-  --homepage https://github.com/OtterlySpaceLabs/speekify \
-  --output "$TAP_REPO/Formula/speekify.rb"
-
-cd "$TAP_REPO"
-git add Formula/speekify.rb
-git commit -m "Update speekify formula to ${VERSION}"
-git push origin main
-```
-
-Utiliser `uv run python`, pas `python`, pour regenerer la formule. L'environnement local peut ne pas exposer `python` directement.
-
-## 12. Verifications post-publication
-
-Apres publication, verifier les deux releases GitHub, le telechargement public direct et le flux Homebrew reel.
-
-Verification des releases:
-
-```bash
-GH_PAGER=cat gh release view "$TAG" --repo OtterlySpaceLabs/speekify
-GH_PAGER=cat gh release view "$TAP_RELEASE_TAG" --repo OtterlySpaceLabs/homebrew-speekify
-```
-
-Smoke test de l'archive publique:
-
-```bash
+# Telechargement public direct
 TMPDIR="$(mktemp -d /tmp/speekify-release-check.XXXXXX)"
 cd "$TMPDIR"
-curl -L -o speekify.tar.gz "$PUBLIC_ASSET_URL"
-shasum -a 256 speekify.tar.gz
+curl -L -o speekify.tar.gz \
+  "https://github.com/OtterlySpaceLabs/speekify/releases/download/${TAG}/speekify-macos-arm64.tar.gz"
 tar -xzf speekify.tar.gz
 ./speekify/speekify --help >/dev/null
 ./speekify/speekify setup --help >/dev/null
-MANPATH="$TMPDIR/share/man${MANPATH:+:$MANPATH}" man speekify >/dev/null
-```
 
-Verification du tap Homebrew public sans modifier l'installation locale:
-
-```bash
-if ! brew --repo otterlyspacelabs/speekify >/dev/null 2>&1; then
-  brew tap otterlyspacelabs/speekify https://github.com/OtterlySpaceLabs/homebrew-speekify
-fi
-
-TAP_CLONE="$(brew --repo otterlyspacelabs/speekify)"
-git -C "$TAP_CLONE" pull --ff-only
-
-HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --tap otterlyspacelabs/speekify
+# Homebrew (tap explicite car le depot n'est pas nomme homebrew-*)
+brew tap otterlyspacelabs/speekify https://github.com/OtterlySpaceLabs/speekify || true
+git -C "$(brew --repo otterlyspacelabs/speekify)" pull --ff-only
 HOMEBREW_NO_AUTO_UPDATE=1 brew fetch --force --formula otterlyspacelabs/speekify/speekify
 ```
 
-Resultat attendu:
+Attendu :
 
-- le SHA256 du telechargement public correspond a celui de l'archive locale publiee
-- la formule Homebrew passe `brew audit --strict`
-- `brew fetch` reussit sur la formule publiee sans installer ni desinstaller `speekify`
-- la page de manuel `speekify.1` est presente et exploitable via `man speekify`
+- le SHA256 du telechargement correspond a celui de la formule
+- `brew fetch` reussit sans installer/desinstaller
 
-## 13. Checklist finale
-
-- [ ] `VERSION`, `WORK_BRANCH` et les notes de version sont definis
-- [ ] `pyproject.toml` contient la bonne version
-- [ ] `uv.lock` contient la bonne version pour le package local `speekify`
-- [ ] `uv run pytest` passe
-- [ ] `uv run ruff check .` passe
-- [ ] l'archive locale `dist/${ARCHIVE_NAME}` existe
-- [ ] le SHA256 de l'archive a ete capture
-- [ ] la branche source a ete poussee
-- [ ] le tag `vX.Y.Z` a ete cree et pousse
-- [ ] la release source `vX.Y.Z` existe et contient l'archive
-- [ ] la release publique `speekify-vX.Y.Z` existe et contient l'archive
-- [ ] `Formula/speekify.rb` pointe vers l'URL publique correcte et le bon SHA256
-- [ ] la formule Homebrew a ete committee et poussee dans le tap public
-- [ ] le telechargement public direct fonctionne
-- [ ] la formule Homebrew passe `brew audit --strict` et `brew fetch` sans modifier l'installation locale
-- [ ] la page `man speekify` fonctionne avec l'archive publiee ou via l'installation Homebrew
-
-## 14. Procedure de rollback ou points de vigilance
-
-### Rollback minimal si la release est invalide
-
-Si la publication a echoue ou si les assets publies sont mauvais, supprimer d'abord les releases GitHub, puis corriger localement, puis recommencer.
-
-Commandes de nettoyage:
+## 7. Rollback
 
 ```bash
-GH_PAGER=cat gh release delete "$TAG" --repo OtterlySpaceLabs/speekify --yes || true
-GH_PAGER=cat gh release delete "$TAP_RELEASE_TAG" --repo OtterlySpaceLabs/homebrew-speekify --yes || true
+GH_PAGER=cat gh release delete "$TAG" --yes || true
 git tag -d "$TAG" || true
 git push origin ":refs/tags/${TAG}" || true
 ```
 
-Si le tag avait ete pousse sur le mauvais commit, le recreer apres correction:
+Si le commit de formule sur `main` est mauvais, le revert comme tout autre commit.
+Les releases PyPI sont immuables : un upload PyPI casse exige une nouvelle version.
 
-```bash
-git tag "$TAG"
-git push origin "$TAG"
+## 8. Points de vigilance
+
+- Ne pas editer `Formula/speekify.rb` a la main : la CI ecrase le fichier.
+- `release.yml` pousse le commit de formule sur `main` avec `GITHUB_TOKEN`. Si
+  `main` a une protection bloquant le bot Actions, l'etape de push echoue —
+  autoriser le bot ou assouplir la regle.
+- Build `arm64` uniquement (runner `macos-latest` = Apple Silicon).
+- Le binaire est non signe : premier lancement = scan Gatekeeper unique.
 ```
-
-### Points de vigilance obligatoires
-
-- Ne pas publier la formule Homebrew avant d'avoir l'URL publique finale et le SHA256 final.
-- La build manuelle locale est l'unique source d'archive canonique; il n'existe plus de build GitHub Actions.
-- Le tap public et le depot source sont deux depots distincts; chacun doit etre committe et pousse separement.
-- La build PyInstaller peut generer `build/` et `speekify.spec`; ces artefacts sont locaux et ne doivent pas etre commites.
-- Utiliser les URLs `OtterlySpaceLabs/...`, pas les anciennes URLs `hiboux/...`.

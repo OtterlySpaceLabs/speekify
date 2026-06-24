@@ -1,30 +1,26 @@
 # Speekify Release Procedure
 
 This document is the canonical, end-to-end procedure to cut a Speekify release.
-The release is **built and published entirely from a local macOS machine**. There
-is no GitHub Actions / CI build: the `.github/workflows/release.yml` workflow was
-removed on purpose so that nothing runs on GitHub on tag push.
-
-It assumes the code changes are already merged locally and the repository is clean
-enough to tag a release.
+The macOS standalone binary and the Homebrew formula are built and published by
+**GitHub Actions** (`.github/workflows/release.yml`), not on a local machine.
 
 ## Goal
 
 Publish a macOS standalone binary that can be installed without Python or uv, then
 make it available through:
 
-- GitHub Releases (artifact hosting only)
-- a Homebrew tap
+- GitHub Releases (artifact hosting)
+- the Homebrew tap shipped in this repository (`Formula/speekify.rb`)
 - direct archive download
 
 Current production setup:
 
-- source repository: `OtterlySpaceLabs/speekify` (private)
-- public Homebrew tap: `OtterlySpaceLabs/homebrew-speekify`
-- public binary asset: a GitHub Release asset attached to `OtterlySpaceLabs/homebrew-speekify`
+- single public repository: `OtterlySpaceLabs/speekify`
+- the Homebrew formula lives in this repo under `Formula/`
+- the public binary asset is attached to the GitHub Release of this repo
 
-The public asset distributed to users and Homebrew must always come from the
-**tap** release, not the private source release.
+Because the repo is public, Homebrew and direct downloads fetch the asset straight
+from this repo's release — there is no separate tap repo anymore.
 
 ## Distribution model
 
@@ -36,119 +32,58 @@ The public asset distributed to users and Homebrew must always come from the
   ~11s (one-time macOS Gatekeeper scan of the unsigned dylibs), every run after is
   ~0.5s. Do not switch back to `--onefile`.
 - First-run model preparation is done with `speekify setup`.
-- Direct generation writes WAV files to the current directory unless `--output-dir`
-  is given.
-
-## Prerequisites
-
-- A macOS machine with the same architecture as the published archive (currently `arm64`)
-- Read/write access to both GitHub repositories
-- `gh` authenticated with the `repo` scope
-- `uv`, `git`, `curl`, `tar`, `shasum`, and `brew` installed locally
-- The source repo open at its root
-- The Homebrew tap cloned next to it at `../homebrew-speekify`
 
 ## Files involved
 
-- `scripts/build_standalone_macos.sh` — local PyInstaller `--onedir` build + archive
-- `scripts/render_homebrew_formula.py` — renders `Formula/speekify.rb` (onedir install)
+- `.github/workflows/release.yml` — CI build + release + formula update (runs on macOS)
+- `scripts/build_standalone_macos.sh` — PyInstaller `--onedir` build + archive (reused by CI)
+- `scripts/render_homebrew_formula.py` — renders `Formula/speekify.rb`
 - `pyproject.toml` — `[project].version`
 
-## Release flow (local only)
+## Release flow
 
-### 1. Validate the repository
+### 1. Bump the version
 
-```bash
-uv sync --group dev
-uv run pytest
-uv run ruff check .
-```
-
-Tests and lint must pass.
-
-### 2. Set the version
-
-Bump `[project].version` in `pyproject.toml` to the target version (example `0.1.0`),
-commit it, and push the branch:
+Update `[project].version` in `pyproject.toml` (and the local `speekify` entry in
+`uv.lock`), commit, and push:
 
 ```bash
-git add pyproject.toml
-git commit -m "chore(release): bump version to 0.1.0"
+git add pyproject.toml uv.lock
+git commit -m "chore(release): bump version to 0.2.0"
 git push origin main
 ```
 
-### 3. Build the archive locally
+### 2. Tag and publish a GitHub Release
+
+Create and push the tag, then publish a Release for it:
 
 ```bash
-./scripts/build_standalone_macos.sh
-```
+git tag v0.2.0
+git push origin v0.2.0
 
-This syncs dev deps, builds the `--onedir` binary with PyInstaller, packages
-`dist/speekify-macos-<arch>.tar.gz` (top level: `speekify/` folder + `share/`), and
-prints the archive SHA256. Capture it:
-
-```bash
-ARCH="$(uname -m)"
-ARCHIVE="dist/speekify-macos-${ARCH}.tar.gz"
-SHA256="$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
-echo "$SHA256"
-```
-
-### 4. Tag the release
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-No workflow runs on this push (the CI workflow was removed). The tag is just a
-record pointing at the released commit.
-
-### 5. Publish the private source release
-
-```bash
-gh release create v0.1.0 "$ARCHIVE" \
-  --repo OtterlySpaceLabs/speekify \
-  --title "Speekify v0.1.0" \
+gh release create v0.2.0 \
+  --title "Speekify v0.2.0" \
   --notes "Release notes here"
 ```
 
-### 6. Publish the public tap release
+`gh release create` publishes the release, which triggers two workflows:
 
-Because `OtterlySpaceLabs/speekify` is private, Homebrew cannot fetch from it.
-Upload the **same** archive to the public tap repo:
+- `publish.yml` → builds the wheel/sdist and publishes to PyPI
+- `release.yml` → builds the macOS binary, attaches it to this release, renders
+  `Formula/speekify.rb`, and commits it back to `main`
 
-```bash
-gh release create speekify-v0.1.0 "$ARCHIVE" \
-  --repo OtterlySpaceLabs/homebrew-speekify \
-  --title "Speekify v0.1.0" \
-  --notes "Public binary release for Homebrew install"
-```
+### 3. What the macOS workflow does (automatic)
 
-### 7. Render and publish the Homebrew formula
+On `release: published`, `release.yml` runs on a `macos-latest` (arm64) runner and:
 
-```bash
-uv run python scripts/render_homebrew_formula.py \
-  --version 0.1.0 \
-  --url https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/download/speekify-v0.1.0/speekify-macos-arm64.tar.gz \
-  --sha256 "$SHA256" \
-  --homepage https://github.com/OtterlySpaceLabs/speekify \
-  --output ../homebrew-speekify/Formula/speekify.rb
+1. builds the `--onedir` archive via `scripts/build_standalone_macos.sh`
+2. uploads `speekify-macos-arm64.tar.gz` to the release (`gh release upload --clobber`)
+3. renders the formula with the release asset URL + its SHA256
+4. commits `Formula/speekify.rb` to `main` with the bumped version
 
-cd ../homebrew-speekify
-git add Formula/speekify.rb
-git commit -m "Update speekify formula to 0.1.0"
-git push origin main
-cd -
-```
+No local macOS machine is required. Monitor it in the Actions tab.
 
-The rendered formula installs the onedir folder into `libexec` and symlinks the
-launcher into `bin` (`bin.install_symlink libexec/"speekify/speekify"`), so the
-launcher finds its sibling `_internal/`. It also installs `share/man/man1/speekify.1`.
-
-Use `uv run python`, not `python` (the local env may not expose `python`).
-
-### 8. Smoke-test the install paths
+### 4. Smoke-test the install paths
 
 Homebrew path:
 
@@ -159,46 +94,55 @@ speekify --version      # first run ~11s (one-time scan), then ~0.5s
 speekify --help
 ```
 
+First-time tap (the repo isn't named `homebrew-*`, so pass the URL explicitly):
+
+```bash
+brew tap otterlyspacelabs/speekify https://github.com/OtterlySpaceLabs/speekify
+brew install speekify
+```
+
 Direct archive path:
 
 ```bash
-curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/homebrew-speekify/releases/latest/download/speekify-macos-arm64.tar.gz
+curl -L -o speekify.tar.gz https://github.com/OtterlySpaceLabs/speekify/releases/latest/download/speekify-macos-arm64.tar.gz
 tar -xzf speekify.tar.gz
 ./speekify/speekify --help
 ```
 
 ## Release checklist
 
-- [ ] `pyproject.toml` version is correct, committed, and pushed
-- [ ] `uv run pytest` passes
-- [ ] `uv run ruff check .` passes
-- [ ] archive built locally and SHA256 captured
+- [ ] `pyproject.toml` / `uv.lock` version bumped, committed, pushed
+- [ ] `uv run pytest` and `uv run ruff check .` pass (also enforced by `test.yml`)
 - [ ] tag `vX.Y.Z` created and pushed
-- [ ] private source release published with the archive
-- [ ] public tap release `speekify-vX.Y.Z` published with the archive
-- [ ] `Formula/speekify.rb` rendered with the public URL and SHA256, committed and pushed
+- [ ] GitHub Release `vX.Y.Z` published
+- [ ] `publish.yml` succeeded (PyPI)
+- [ ] `release.yml` succeeded: archive attached + `Formula/speekify.rb` updated on `main`
 - [ ] `brew upgrade speekify` works and `speekify --version` is correct
-- [ ] direct archive runs without a separate Python install
 
 ## Rollback
 
-If a published release is wrong, delete both releases, fix locally, and redo:
+If a published release is wrong, delete it, fix, and redo:
 
 ```bash
-gh release delete v0.1.0 --repo OtterlySpaceLabs/speekify --yes || true
-gh release delete speekify-v0.1.0 --repo OtterlySpaceLabs/homebrew-speekify --yes || true
-git tag -d v0.1.0 || true
-git push origin ":refs/tags/v0.1.0" || true
+gh release delete v0.2.0 --yes || true
+git tag -d v0.2.0 || true
+git push origin ":refs/tags/v0.2.0" || true
 ```
+
+If the formula commit on `main` is bad, revert it like any other commit. PyPI
+releases are immutable, so a broken PyPI upload requires a new patch version.
 
 ## Known limitations
 
-- The release process is macOS-focused and `arm64`-only at the moment.
+- macOS-focused and `arm64`-only (the runner is `macos-latest` = Apple Silicon).
 - The binary is unsigned, so the first launch after each install/upgrade pays a
   one-time macOS Gatekeeper scan.
+- `release.yml` pushes the formula commit to `main` with `GITHUB_TOKEN`. If `main`
+  has branch protection that blocks the Actions bot, the push step will fail —
+  allow the bot to push or relax the rule for `Formula/`.
 
 ## Future improvements
 
-- Wrap the steps above in a single local `scripts/release.sh`.
 - Add a separate `x86_64` archive if Intel macOS support is needed.
 - Codesign + notarize the bundle to remove the one-time first-run scan.
+- Add a `brew audit --strict` validation step to the workflow after the upload.
