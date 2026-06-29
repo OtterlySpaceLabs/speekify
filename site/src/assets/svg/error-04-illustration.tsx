@@ -597,42 +597,42 @@ const Error04Illustration = (props: SVGAttributes<SVGElement>) => {
         strokeLinejoin='round'
       />
       <path
-        d='M274.516 246.184C274.516 246.184 263.917 240.971 253.433 237.824'
+        d='M274.516 243.184C274.516 243.184 263.917 240.971 253.433 237.824'
         stroke='var(--foreground)'
         strokeWidth='1.1133'
         strokeMiterlimit='10'
         strokeLinecap='round'
       />
       <path
-        d='M273.621 250.962C273.621 250.962 261.494 250.044 249.748 251.856'
+        d='M273.621 247.962C273.621 247.962 261.494 250.044 249.748 251.856'
         stroke='var(--foreground)'
         strokeWidth='1.1133'
         strokeMiterlimit='10'
         strokeLinecap='round'
       />
       <path
-        d='M274.815 255.143C274.815 255.143 263.762 259.773 255.718 265.093'
+        d='M274.815 252.143C274.815 252.143 265.973 258.247 259.537 262.503'
         stroke='var(--foreground)'
         strokeWidth='1.1133'
         strokeMiterlimit='10'
         strokeLinecap='round'
       />
       <path
-        d='M303.838 245.288C303.838 245.288 314.66 240.431 325.247 237.632'
+        d='M303.838 242.288C303.838 242.288 314.66 240.431 325.247 237.632'
         stroke='var(--foreground)'
         strokeWidth='1.1133'
         strokeMiterlimit='10'
         strokeLinecap='round'
       />
       <path
-        d='M304.734 250.067C304.734 250.067 317.202 249.617 328.828 251.662'
+        d='M304.734 247.067C304.734 247.067 317.202 249.617 328.828 251.662'
         stroke='var(--foreground)'
         strokeWidth='1.1133'
         strokeMiterlimit='10'
         strokeLinecap='round'
       />
       <path
-        d='M303.54 254.247C303.54 254.247 315.075 259.219 323.352 264.876'
+        d='M303.54 251.247C303.54 251.247 310.922 256.349 316.22 259.969'
         stroke='var(--foreground)'
         strokeWidth='1.1133'
         strokeMiterlimit='10'
