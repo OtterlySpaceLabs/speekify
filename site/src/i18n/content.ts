@@ -77,7 +77,7 @@ const en = {
 		steps: [
 			{
 				title: "Install Speekify.",
-				body: "Homebrew on macOS, from source with uv, or from PyPI once it's released.",
+				body: "Homebrew on macOS, from source with uv, or from PyPI.",
 			},
 			{
 				title: "Run setup once.",
@@ -132,7 +132,7 @@ const en = {
 			},
 			{
 				title: "YouTube transcript → audio",
-				body: "Pull a video's captions and listen instead of watching.",
+				body: "Pull a video's captions and listen instead of watching. Add --lang fr to hear an English video in French.",
 			},
 			{
 				title: "News & tech veille",
@@ -146,10 +146,10 @@ const en = {
 	},
 	install: {
 		title: "Install Speekify.",
-		subtitle: "Homebrew and from-source work today. PyPI is coming.",
+		subtitle: "Homebrew, from source, or from PyPI — all work today.",
 		brewLabel: "macOS — Homebrew (no Python or uv required)",
 		sourceLabel: "From source (uv)",
-		pypiLabel: "pip / pipx / uv — once published to PyPI",
+		pypiLabel: "pip / pipx / uv — from PyPI",
 		note: "Run speekify setup once after installing. It downloads and warms the local Supertonic model (and, by default, the English→French translation model). Skip it and the models download automatically on first use.",
 	},
 	openSource: {
@@ -240,7 +240,7 @@ const fr: Content = {
 		steps: [
 			{
 				title: "Installez Speekify.",
-				body: "Homebrew sur macOS, depuis les sources avec uv, ou depuis PyPI une fois publié.",
+				body: "Homebrew sur macOS, depuis les sources avec uv, ou depuis PyPI.",
 			},
 			{
 				title: "Lancez la configuration une fois.",
@@ -295,7 +295,7 @@ const fr: Content = {
 			},
 			{
 				title: "Transcription YouTube → audio",
-				body: "Récupérez les sous-titres d'une vidéo et écoutez au lieu de regarder.",
+				body: "Récupérez les sous-titres d'une vidéo et écoutez au lieu de regarder. Ajoutez --lang fr pour écouter en français une vidéo en anglais.",
 			},
 			{
 				title: "Actualités et veille tech",
@@ -309,10 +309,10 @@ const fr: Content = {
 	},
 	install: {
 		title: "Installez Speekify.",
-		subtitle: "Homebrew et l'installation depuis les sources fonctionnent dès aujourd'hui. PyPI arrive bientôt.",
+		subtitle: "Homebrew, depuis les sources ou depuis PyPI — tout fonctionne dès aujourd'hui.",
 		brewLabel: "macOS — Homebrew (ni Python ni uv requis)",
 		sourceLabel: "Depuis les sources (uv)",
-		pypiLabel: "pip / pipx / uv — une fois publié sur PyPI",
+		pypiLabel: "pip / pipx / uv — depuis PyPI",
 		note: "Lancez speekify setup une fois après l'installation. Il télécharge et préchauffe le modèle Supertonic local (et, par défaut, le modèle de traduction anglais→français). Sautez cette étape et les modèles se téléchargeront automatiquement à la première utilisation.",
 	},
 	openSource: {

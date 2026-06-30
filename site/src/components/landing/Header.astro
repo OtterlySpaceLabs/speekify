@@ -16,7 +16,9 @@ const navLinks = [
 ];
 ---
 
-<header class="bg-background/80 border-border sticky top-0 z-50 h-16 border-b backdrop-blur">
+<header
+	class="animate-in fade-in slide-in-from-top-4 duration-500 bg-background/80 border-border sticky top-0 z-50 h-16 border-b backdrop-blur"
+>
 	<div class="mx-auto flex h-full max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
 		<a href="#top" class="text-lg font-semibold">Speekify</a>
 
@@ -49,7 +51,12 @@ const navLinks = [
 					))
 				}
 			</nav>
-			<a href={repo} class="text-muted-foreground hover:text-foreground text-sm max-md:hidden">{t.nav.github}</a>
+			<a href={repo} class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm max-md:hidden">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true">
+					<path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.2 12.2 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"></path>
+				</svg>
+				{t.nav.github}
+			</a>
 			<a href="#install" class={buttonVariants({ size: "sm" })}>{t.nav.getStarted}</a>
 
 			<details class="relative md:hidden">
@@ -79,7 +86,12 @@ const navLinks = [
 							</a>
 						))
 					}
-					<a href={repo} class="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md px-3 py-2 transition">{t.nav.github}</a>
+					<a href={repo} class="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-2 rounded-md px-3 py-2 transition">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true">
+							<path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.2 12.2 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"></path>
+						</svg>
+						{t.nav.github}
+					</a>
 					<div class="border-border my-1 border-t"></div>
 					{
 						alternates.map((alt) => (
