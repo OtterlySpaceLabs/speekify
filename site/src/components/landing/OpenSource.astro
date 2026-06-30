@@ -1,22 +1,21 @@
 ---
 import { buttonVariants } from "@/components/ui/button";
 import { badgeVariants } from "@/components/ui/badge";
+import { getContent, type Lang } from "@/i18n/content";
 
 const repo = "https://github.com/OtterlySpaceLabs/speekify";
+const t = getContent(Astro.currentLocale as Lang).openSource;
 ---
 
 <section id="open-source" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 	<div class="flex flex-col items-center text-center">
-		<span class={badgeVariants({ variant: "secondary" })}>MIT Licensed</span>
-		<h2 class="mt-6">Open source, MIT licensed.</h2>
-		<p class="mx-auto mt-6 max-w-2xl">
-			Speekify is built by Otterly Space Labs and released under the MIT license. The code is on GitHub — read it,
-			open an issue, or send a pull request. If it's useful to you, a star helps other people find it.
-		</p>
+		<span class={badgeVariants({ variant: "secondary" })}>{t.badge}</span>
+		<h2 class="mt-6">{t.title}</h2>
+		<p class="mx-auto mt-6 max-w-2xl">{t.body}</p>
 
 		<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-			<a href={repo} class={buttonVariants({ size: "lg" })}>Star on GitHub</a>
-			<a href={`${repo}/issues`} class={buttonVariants({ variant: "outline", size: "lg" })}>Report an issue</a>
+			<a href={repo} class={buttonVariants({ size: "lg" })}>{t.star}</a>
+			<a href={`${repo}/issues`} class={buttonVariants({ variant: "outline", size: "lg" })}>{t.report}</a>
 		</div>
 	</div>
 </section>

@@ -1,22 +1,18 @@
 ---
 import Card from "@/components/landing/Card.astro";
+import { getContent, type Lang } from "@/i18n/content";
+
+const t = getContent(Astro.currentLocale as Lang).why;
 ---
 
 <section id="why" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 	<div class="max-w-3xl">
-		<h2>Your reading list became a backlog.</h2>
-		<p class="text-muted-foreground mt-4 text-lg">Not everything worth knowing deserves your screen time.</p>
-		<p class="mt-6">
-			There's more to read than there are hours to sit and read it — saved articles, long PDFs, talks you bookmarked
-			and never opened. Most of it doesn't need your eyes. It needs twenty minutes of your attention, which you
-			already have on a walk, a commute, or while doing the dishes. Speekify converts the text into audio so you can
-			clear the backlog without sitting still for it.
-		</p>
+		<h2>{t.title}</h2>
+		<p class="text-muted-foreground mt-4 text-lg">{t.subtitle}</p>
+		<p class="mt-6">{t.body}</p>
 	</div>
 
 	<div class="mt-10 grid gap-4 sm:grid-cols-3">
-		<Card title="Listen anywhere">Take your backlog on a walk, a commute, or the dishes.</Card>
-		<Card title="Local & private">Audio is synthesized on your machine. Nothing you read leaves your computer.</Card>
-		<Card title="One command">Point Speekify at a source and get a file back.</Card>
+		{t.cards.map((card) => <Card title={card.title}>{card.body}</Card>)}
 	</div>
 </section>

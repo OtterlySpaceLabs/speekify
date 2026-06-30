@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Speekify">
+	<rect width="1200" height="630" fill="#1a1714"/>
+	<text x="80" y="300" font-family="Geist, Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#f5f1e6">Speekify</text>
+	<text x="80" y="380" font-family="Geist, Helvetica, Arial, sans-serif" font-size="40" fill="#bdb6aa">Turn text into local audio from your terminal.</text>
+	<text x="80" y="520" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="34" fill="#9c958a">$ speekify "https://example.com/article"</text>
+</svg>

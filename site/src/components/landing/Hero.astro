@@ -2,33 +2,32 @@
 import { buttonVariants } from "@/components/ui/button";
 import { badgeVariants } from "@/components/ui/badge";
 import CodeBlock from "@/components/landing/CodeBlock.astro";
+import { getContent, type Lang } from "@/i18n/content";
 
 const repo = "https://github.com/OtterlySpaceLabs/speekify";
 const heroCommand = 'speekify "https://example.com/article"';
+const t = getContent(Astro.currentLocale as Lang).hero;
 ---
 
 <section id="top" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 	<div class="flex flex-col items-center text-center">
 		<div class="bg-muted border-border inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm">
-			<span class={badgeVariants({ variant: "default" })}>Local TTS</span>
-			<span class="text-muted-foreground">Runs locally with Supertonic v3 — no audio leaves your machine</span>
+			<span class={badgeVariants({ variant: "default" })}>{t.badge}</span>
+			<span class="text-muted-foreground">{t.badgeText}</span>
 		</div>
 
-		<h1 class="mt-6 max-w-3xl text-balance">Turn anything you'd read into something you can hear.</h1>
+		<h1 class="mt-6 max-w-3xl text-balance">{t.title}</h1>
 
-		<p class="text-muted-foreground mx-auto mt-6 max-w-2xl text-lg">
-			Speekify is an open-source CLI that converts articles, PDFs, YouTube transcripts, and piped text into a local
-			audio file — synthesized on your own machine. Nothing you read leaves your computer.
-		</p>
+		<p class="text-muted-foreground mx-auto mt-6 max-w-2xl text-lg">{t.description}</p>
 
 		<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-			<a href="#install" class={buttonVariants({ size: "lg" })}>Get started</a>
-			<a href={repo} class={buttonVariants({ variant: "outline", size: "lg" })}>View on GitHub</a>
+			<a href="#install" class={buttonVariants({ size: "lg" })}>{t.getStarted}</a>
+			<a href={repo} class={buttonVariants({ variant: "outline", size: "lg" })}>{t.viewGithub}</a>
 		</div>
 
 		<div class="mx-auto mt-10 w-full max-w-xl">
 			<CodeBlock code={heroCommand} />
-			<p class="text-muted-foreground mt-2 text-xs">Output is a .wav file in your current folder.</p>
+			<p class="text-muted-foreground mt-2 text-xs">{t.caption}</p>
 		</div>
 	</div>
 </section>

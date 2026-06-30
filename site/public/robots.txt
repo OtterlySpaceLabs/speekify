@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://otterlyspacelabs.github.io/speekify/sitemap-index.xml

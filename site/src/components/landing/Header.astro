@@ -1,13 +1,18 @@
 ---
 import { buttonVariants } from "@/components/ui/button";
+import { getContent, languages, type Lang } from "@/i18n/content";
+import { getAlternates } from "@/i18n/utils";
 
 const repo = "https://github.com/OtterlySpaceLabs/speekify";
+const lang = (Astro.currentLocale ?? "en") as Lang;
+const t = getContent(lang);
+const alternates = getAlternates(Astro.url.pathname, lang);
 
 const navLinks = [
-	{ href: "#how", label: "How it works" },
-	{ href: "#cli", label: "CLI" },
-	{ href: "#mcp", label: "MCP" },
-	{ href: "#install", label: "Install" },
+	{ href: "#how", label: t.nav.how },
+	{ href: "#cli", label: t.nav.cli },
+	{ href: "#mcp", label: t.nav.mcp },
+	{ href: "#install", label: t.nav.install },
 ];
 ---
 
@@ -26,8 +31,26 @@ const navLinks = [
 		</nav>
 
 		<div class="flex items-center gap-4">
-			<a href={repo} class="text-muted-foreground hover:text-foreground text-sm max-md:hidden">GitHub</a>
-			<a href="#install" class={buttonVariants({ size: "sm" })}>Get started</a>
+			<nav aria-label="Language" class="text-muted-foreground flex items-center gap-2 text-sm max-md:hidden">
+				{
+					alternates.map((alt, index) => (
+						<>
+							{index > 0 && <span aria-hidden="true">/</span>}
+							<a
+								href={alt.rel}
+								hreflang={alt.locale}
+								aria-current={alt.locale === lang ? "true" : undefined}
+								class:list={["hover:text-foreground transition", alt.locale === lang && "text-foreground font-medium"]}
+							>
+								{alt.locale.toUpperCase()}
+								<span class="sr-only"> — {languages[alt.locale]}</span>
+							</a>
+						</>
+					))
+				}
+			</nav>
+			<a href={repo} class="text-muted-foreground hover:text-foreground text-sm max-md:hidden">{t.nav.github}</a>
+			<a href="#install" class={buttonVariants({ size: "sm" })}>{t.nav.getStarted}</a>
 
 			<details class="relative md:hidden">
 				<summary class="text-muted-foreground hover:text-foreground flex size-8 cursor-pointer list-none items-center justify-center">
@@ -46,7 +69,7 @@ const navLinks = [
 						<line x1="4" x2="20" y1="12" y2="12"></line>
 						<line x1="4" x2="20" y1="18" y2="18"></line>
 					</svg>
-					<span class="sr-only">Menu</span>
+					<span class="sr-only">{t.nav.menu}</span>
 				</summary>
 				<div class="bg-card border-border absolute top-full right-0 mt-2 flex w-44 flex-col gap-1 rounded-lg border p-2 text-sm shadow-lg">
 					{
@@ -56,7 +79,23 @@ const navLinks = [
 							</a>
 						))
 					}
-					<a href={repo} class="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md px-3 py-2 transition">GitHub</a>
+					<a href={repo} class="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md px-3 py-2 transition">{t.nav.github}</a>
+					<div class="border-border my-1 border-t"></div>
+					{
+						alternates.map((alt) => (
+							<a
+								href={alt.rel}
+								hreflang={alt.locale}
+								aria-current={alt.locale === lang ? "true" : undefined}
+								class:list={[
+									"rounded-md px-3 py-2 transition hover:bg-muted hover:text-foreground",
+									alt.locale === lang ? "text-foreground font-medium" : "text-muted-foreground",
+								]}
+							>
+								{languages[alt.locale]}
+							</a>
+						))
+					}
 				</div>
 			</details>
 		</div>

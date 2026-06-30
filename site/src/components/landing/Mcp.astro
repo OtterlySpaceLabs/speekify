@@ -1,6 +1,9 @@
 ---
 import { buttonVariants } from "@/components/ui/button";
 import CodeBlock from "@/components/landing/CodeBlock.astro";
+import { getContent, type Lang } from "@/i18n/content";
+
+const t = getContent(Astro.currentLocale as Lang).mcp;
 
 const startServer = `speekify mcp                              # stdio — for local desktop AI clients
 speekify mcp --transport streamable-http  # local HTTP endpoint`;
@@ -10,22 +13,14 @@ const addToClaude = "claude mcp add --transport stdio speekify -- speekify mcp";
 
 <section id="mcp" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 	<div class="max-w-3xl">
-		<h2>Let your AI assistant make the audio.</h2>
-		<p class="text-muted-foreground mt-4 text-lg">
-			Speekify ships a local Model Context Protocol server, so assistants can call it as a tool inside their
-			automations.
-		</p>
-		<p class="mt-6">
-			Start the server with one command and Speekify becomes available to MCP-capable clients — Claude Code, GitHub
-			Copilot, Codex, and OpenAI's remote MCP. The server exposes speekify_generate_wav (text, URL, or file → WAV
-			with structured details), speekify_generation_defaults (supported voices, languages, and ranges), and a
-			news_recap_to_audio prompt template. The audio is still generated locally on your machine.
-		</p>
+		<h2>{t.title}</h2>
+		<p class="text-muted-foreground mt-4 text-lg">{t.subtitle}</p>
+		<p class="mt-6">{t.body}</p>
 	</div>
 
 	<div class="mt-10 grid gap-4 md:grid-cols-2">
-		<CodeBlock label="Start the MCP server" code={startServer} />
-		<CodeBlock label="Add to Claude Code" code={addToClaude} />
+		<CodeBlock label={t.startLabel} code={startServer} />
+		<CodeBlock label={t.addLabel} code={addToClaude} />
 	</div>
 
 	<div class="mt-6">
@@ -33,7 +28,7 @@ const addToClaude = "claude mcp add --transport stdio speekify -- speekify mcp";
 			href="https://github.com/OtterlySpaceLabs/speekify/blob/main/docs/mcp-clients.md"
 			class={buttonVariants({ variant: "link" })}
 		>
-			Per-client setup →
+			{t.perClient}
 		</a>
 	</div>
 </section>

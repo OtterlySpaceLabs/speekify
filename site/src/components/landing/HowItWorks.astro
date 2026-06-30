@@ -1,36 +1,17 @@
 ---
-const steps = [
-	{
-		title: "Install Speekify.",
-		body: "Homebrew on macOS, from source with uv, or from PyPI once it's released.",
-	},
-	{
-		title: "Run setup once.",
-		body: "<code>speekify setup</code> downloads and warms the local model so the first real run is fast.",
-	},
-	{
-		title: "Give it a source.",
-		body: "Pass inline text, a URL, a file path, or pipe text in — Speekify detects the type automatically.",
-	},
-	{
-		title: "Get a WAV.",
-		body: "Speekify writes a .wav file to your current folder (or wherever --output-dir points). Play it anywhere.",
-	},
-	{
-		title: "Optional: wire it into your AI workflow.",
-		body: "Run <code>speekify mcp</code> to let an assistant like Claude Code or Codex generate audio as a tool call.",
-	},
-];
+import { getContent, type Lang } from "@/i18n/content";
+
+const t = getContent(Astro.currentLocale as Lang).how;
 ---
 
 <section id="how" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 	<div class="max-w-3xl">
-		<h2>From install to audio in five steps.</h2>
+		<h2>{t.title}</h2>
 	</div>
 
 	<ol class="mt-10 flex flex-col gap-6">
 		{
-			steps.map((step, index) => (
+			t.steps.map((step, index) => (
 				<li class="flex items-start gap-4">
 					<span class="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
 						{index + 1}

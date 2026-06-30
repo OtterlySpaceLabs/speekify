@@ -1,12 +1,11 @@
 ---
-const repo = "https://github.com/OtterlySpaceLabs/speekify";
+import { getContent, type Lang } from "@/i18n/content";
 
-const links = [
-	{ href: repo, label: "GitHub" },
-	{ href: `${repo}#readme`, label: "Documentation" },
-	{ href: `${repo}/blob/main/docs/usage.md`, label: "CLI Reference" },
-	{ href: `${repo}/blob/main/docs/mcp-clients.md`, label: "MCP Setup" },
-];
+const repo = "https://github.com/OtterlySpaceLabs/speekify";
+const t = getContent(Astro.currentLocale as Lang).footer;
+
+const hrefs = [repo, `${repo}#readme`, `${repo}/blob/main/docs/usage.md`, `${repo}/blob/main/docs/mcp-clients.md`];
+const links = hrefs.map((href, index) => ({ href, label: t.links[index] }));
 ---
 
 <footer class="border-border border-t">
@@ -14,7 +13,7 @@ const links = [
 		<div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
 			<div>
 				<div class="text-lg font-semibold">Speekify</div>
-				<p class="text-muted-foreground mt-2 text-sm">Open-source CLI that turns text into local audio.</p>
+				<p class="text-muted-foreground mt-2 text-sm">{t.tagline}</p>
 			</div>
 
 			<nav class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -29,11 +28,8 @@ const links = [
 		</div>
 
 		<div class="border-border mt-8 border-t pt-6">
-			<p class="text-muted-foreground text-sm">MIT License · © 2026 Otterly Space SARL</p>
-			<p class="text-muted-foreground mt-2 max-w-3xl text-xs">
-				Speekify only fetches content you point it at, for your personal use. You're responsible for respecting
-				the terms of service and copyright of any source you extract from.
-			</p>
+			<p class="text-muted-foreground text-sm">{t.license}</p>
+			<p class="text-muted-foreground mt-2 max-w-3xl text-xs">{t.disclaimer}</p>
 		</div>
 	</div>
 </footer>
