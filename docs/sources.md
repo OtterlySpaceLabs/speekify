@@ -25,10 +25,13 @@ text.
 
 - Speekify accepts only Supertonic-supported ISO 639-1 language codes such as
   `en`, `fr`, `ja`, or `ko`, plus `na` for language-agnostic synthesis.
-- The direct CLI defaults to French narration (`fr`) with voice `M5`, speed
-  `0.98`, `10` synthesis steps, and `0.25 s` chunk silence.
-- When French synthesis is used (including the default), English inputs are
-  auto-detected and translated to French before TTS with
+- The direct CLI defaults to auto-detecting the source language and
+  synthesizing in that language without translation, with voice `M5`, speed
+  `0.98`, `10` synthesis steps, and `0.25 s` chunk silence. When the language
+  can't be detected, it falls back to language-agnostic synthesis (`na`), never
+  to French.
+- When French synthesis is explicitly requested (`--lang fr` or `fr` config),
+  English inputs are auto-detected and translated to French before TTS with
   `Helsinki-NLP/opus-mt-en-fr`.
 
 ## Text handling

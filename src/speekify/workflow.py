@@ -10,12 +10,12 @@ from speekify.config import (
     AUTO_TTS_LANGUAGE,
     DEFAULT_TRANSLATION_TARGET_LANG,
     DEFAULT_SILENCE_DURATION,
-    DEFAULT_TTS_LANG,
     MAX_SPEED,
     MAX_STEPS,
     MIN_SPEED,
     MIN_STEPS,
     SUPPORTED_TTS_LANGUAGES,
+    UNKNOWN_TTS_LANGUAGE,
 )
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
 from speekify.extract_common import is_document_path_input, read_document
@@ -131,8 +131,9 @@ async def resolve_content(
 
     _update_status(status_callback, "checking language")
     detected = await asyncio.to_thread(detect_language_code, content.text)
-    # ponytail: detection returns None on short/ambiguous text; fall back to the project default.
-    effective = detected if detected in SUPPORTED_TTS_LANGUAGES else DEFAULT_TTS_LANG
+    # ponytail: detection returns None on short/ambiguous text → language-agnostic "na",
+    # never French. An English source only becomes French audio with an explicit --lang fr.
+    effective = detected if detected in SUPPORTED_TTS_LANGUAGES else UNKNOWN_TTS_LANGUAGE
     logger.info("Language auto-detected source=%r effective=%r", detected, effective)
     return ResolvedContent(content=content, language_code=effective)
 

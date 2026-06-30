@@ -59,7 +59,7 @@ const en = {
 			},
 			{
 				title: "Multilingual",
-				body: "en, fr, de, es, it, pt, ja, ko, and more, plus na for language-agnostic synthesis. English input is auto-translated to French when you synthesize in French.",
+				body: "en, fr, de, es, it, pt, ja, ko, and more, plus na for language-agnostic synthesis. By default Speekify auto-detects the source language and speaks it back — English in, English out. Pass --lang fr to translate English input to French before synthesis.",
 			},
 			{
 				title: "Voice control",
@@ -222,7 +222,7 @@ const fr: Content = {
 			},
 			{
 				title: "Multilingue",
-				body: "en, fr, de, es, it, pt, ja, ko et plus, ainsi que na pour une synthèse indépendante de la langue. Le texte anglais est automatiquement traduit en français lorsque vous synthétisez en français.",
+				body: "en, fr, de, es, it, pt, ja, ko et plus, ainsi que na pour une synthèse indépendante de la langue. Par défaut, Speekify détecte la langue source et la restitue — anglais en entrée, anglais en sortie. Ajoutez --lang fr pour traduire le texte anglais en français avant la synthèse.",
 			},
 			{
 				title: "Contrôle de la voix",

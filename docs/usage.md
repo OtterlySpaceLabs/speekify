@@ -106,7 +106,7 @@ uv run speekify setup --help
 | Option | Default | Description |
 |---|---|---|
 | `source` | *(stdin if piped)* | Text to synthesize, a URL to extract, or a path to a local `.txt`/`.md`/`.text`/`.pdf` file. Required unless stdin is piped. |
-| `--lang CODE` | `fr` | Supertonic ISO 639-1 language code. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, and more. Use `na` for language-agnostic synthesis. |
+| `--lang CODE` | `auto` (auto-detect) | Supertonic ISO 639-1 language code. Omit to auto-detect the source language and synthesize in it with no translation; falls back to `na` (language-agnostic) when the language can't be detected. Pass `--lang fr` to translate English input to French before TTS. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, and more. Use `na` for language-agnostic synthesis. |
 | `--voice NAME` | `M5` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
 | `--custom-style-path PATH` | — | Load a Supertonic voice-style JSON file, such as a Voice Builder export. Overrides `--voice`. |
 | `--speed VALUE` | `0.98` | Playback speed multiplier (`0.7`–`2.0`). |

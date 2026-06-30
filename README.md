@@ -11,7 +11,7 @@ readable content of a URL. Audio is generated locally with Supertonic v3.
 | **Many input sources** | Inline text, piped stdin, local `.txt`/`.md`/`.pdf` files, readable URLs, and YouTube transcripts — auto-detected. |
 | **Local TTS** | WAV files synthesized on your machine with Supertonic v3 — no audio leaves your computer. |
 | **Multilingual** | `en`, `fr`, `de`, `es`, `it`, `pt`, `ja`, `ko`, and more, plus `na` for language-agnostic synthesis. |
-| **Auto-translation** | English input is detected and translated to French before TTS when synthesizing in French (the default). |
+| **Auto-translation** | By default Speekify auto-detects the source language and synthesizes in it — no translation. English is detected and translated to French before TTS only when you pass `--lang fr`. |
 | **Voice control** | 10 built-in voices (`M1`–`M5`, `F1`–`F5`), custom Voice Builder JSON styles, plus speed and synthesis-step tuning. |
 | **MCP server** | Expose Speekify as a tool so AI assistants can generate audio during automations. |
 

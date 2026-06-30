@@ -233,6 +233,48 @@ def test_resolve_content_auto_uses_detected_language_without_translation() -> No
     assert statuses == ["checking language"]
 
 
+def test_resolve_content_auto_keeps_english_source_untranslated() -> None:
+    translator = FrenchTranslator()
+    statuses: list[str] = []
+
+    resolved = asyncio.run(
+        resolve_content(
+            "This article is written in plain, careful English from start to finish.",
+            is_url_mode=False,
+            requested_language="auto",
+            translator=translator,
+            logger=logging.getLogger("speekify.tests.workflow"),
+            status_callback=statuses.append,
+        )
+    )
+
+    # iff rule: English source stays English in auto mode; French only with --lang fr.
+    assert resolved.language_code == "en"
+    assert resolved.content.text.startswith("This article")
+    assert translator.calls == []
+    assert statuses == ["checking language"]
+
+
+def test_resolve_content_auto_falls_back_to_language_agnostic_when_undetected() -> None:
+    translator = FrenchTranslator()
+    statuses: list[str] = []
+
+    resolved = asyncio.run(
+        resolve_content(
+            "Hi there.",  # too short to detect → "na", never French
+            is_url_mode=False,
+            requested_language="auto",
+            translator=translator,
+            logger=logging.getLogger("speekify.tests.workflow"),
+            status_callback=statuses.append,
+        )
+    )
+
+    assert resolved.language_code == "na"
+    assert translator.calls == []
+    assert statuses == ["checking language"]
+
+
 def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
     statuses: list[str] = []
 

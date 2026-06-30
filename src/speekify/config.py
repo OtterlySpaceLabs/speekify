@@ -7,7 +7,6 @@ TRANSLATION_MODEL_NAME = "Helsinki-NLP/opus-mt-en-fr"
 TRANSLATION_CHUNK_TOKEN_LIMIT = 128
 TRANSLATION_MAX_LENGTH = 512
 DEFAULT_VOICE = "M5"
-DEFAULT_TTS_LANG = "fr"
 # Sentinel for "use the document's detected language" (no --lang given).
 AUTO_TTS_LANGUAGE = "auto"
 DEFAULT_TRANSLATION_TARGET_LANG = "fr"

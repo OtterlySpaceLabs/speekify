@@ -27,12 +27,12 @@ Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/
 - Keep synthesis local through the Supertonic Python package.
 - Default model: `supertonic-3`.
 - Default voice: `M5`.
-- Default synthesis language: `fr`.
+- Default synthesis language: auto-detect the source language and synthesize in it (no translation); fall back to language-agnostic `na` when detection fails.
 - Default speed: `0.98`.
 - Default synthesis steps: `10`.
 - Default Supertonic chunk silence: `0.25` seconds.
 - Supported language values come from Supertonic ISO 639-1 codes plus `na` for language-agnostic synthesis.
-- When `--lang fr` is selected, English input is translated to French with `Helsinki-NLP/opus-mt-en-fr` before synthesis.
+- When `--lang fr` is selected, English input is translated to French with `Helsinki-NLP/opus-mt-en-fr` before synthesis. This is the only path from English source to French audio: English produces French audio if and only if `--lang fr` (or equivalent `fr` config) is given.
 - `speekify setup` warms Supertonic and English-to-French translation by default. Use `--skip-translation` to skip the optional translation download.
 - Supertonic handles normal long-text chunking internally via `max_chunk_length` and `silence_duration`; Speekify only splits external batches above the SDK text limit.
 - URL extraction produces readable article/body text, not raw HTML.

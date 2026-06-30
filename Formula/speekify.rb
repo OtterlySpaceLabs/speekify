@@ -1,5 +1,5 @@
 class Speekify < Formula
-  desc "French text and URL to WAV converter powered by Supertonic v3"
+  desc "Auto-detecting text and URL to WAV converter powered by Supertonic v3"
   homepage "https://github.com/OtterlySpaceLabs/speekify"
   url "https://github.com/OtterlySpaceLabs/speekify/releases/download/v0.1.1/speekify-macos-arm64.tar.gz"
   sha256 "e42c2f6b1cb4906bcfbd7d929297f8fa953b3efd9145a75dff23ae4b379f53da"

@@ -2,15 +2,13 @@ from speekify.config import (
     DEFAULT_SILENCE_DURATION,
     DEFAULT_SPEED,
     DEFAULT_STEPS,
-    DEFAULT_TTS_LANG,
     DEFAULT_VOICE,
     MAX_STEPS,
     MIN_STEPS,
 )
 
 
-def test_default_tts_preset_targets_natural_french_narration() -> None:
-    assert DEFAULT_TTS_LANG == "fr"
+def test_default_tts_preset_matches_documented_narration_defaults() -> None:
     assert DEFAULT_VOICE == "M5"
     assert DEFAULT_SPEED == 0.98
     assert DEFAULT_STEPS == 10

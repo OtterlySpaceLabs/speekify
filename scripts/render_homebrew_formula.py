@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 def render_formula(*, version: str, url: str, sha256: str, homepage: str) -> str:
     return (
         "class Speekify < Formula\n"
-        '  desc "French text and URL to WAV converter powered by Supertonic v3"\n'
+        '  desc "Auto-detecting text and URL to WAV converter powered by Supertonic v3"\n'
         f'  homepage "{homepage}"\n'
         f'  url "{url}"\n'
         f'  sha256 "{sha256}"\n'

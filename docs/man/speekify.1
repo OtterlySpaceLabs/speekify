@@ -36,7 +36,9 @@ The default workflow accepts plain text, piped text, a single URL, or a path to 
 .B .txt , .md , .text ,
 or
 .B .pdf
-file. URL input is reduced to readable article content before synthesis. A file source is read automatically (PDF text is extracted with pypdf) and its name becomes the default output title. English input can be translated to French before text to speech, and sparse speech tags can be added before generation.
+file. URL input is reduced to readable article content before synthesis. A file source is read automatically (PDF text is extracted with pypdf) and its name becomes the default output title. By default the source language is auto-detected and synthesized as-is with no translation; English input is translated to French before text to speech only when French synthesis is requested with
+.B --lang fr .
+Sparse speech tags can be added before generation.
 .PP
 When passing a URL that contains shell-special characters such as
 .B ?
@@ -84,7 +86,11 @@ Use a Supertonic voice-style JSON file. This overrides
 .BR --voice .
 .TP
 .B --lang
-Select the Supertonic ISO 639-1 language code such as en, fr, ja, or na.
+Select the Supertonic ISO 639-1 language code such as en, fr, ja, or na. When omitted, the source language is auto-detected and synthesized without translation;
+.B --lang fr
+detects English input and translates it to French before synthesis. Other codes synthesize in that language with no translation, and
+.B na
+is the language-agnostic fallback used when detection fails.
 .TP
 .B --speed
 Adjust the playback speed multiplier.
