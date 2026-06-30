@@ -1,0 +1,33 @@
+---
+import CodeBlock from "@/components/landing/CodeBlock.astro";
+
+const brewCommand = `brew tap otterlyspacelabs/speekify https://github.com/OtterlySpaceLabs/speekify
+brew install speekify
+speekify setup`;
+
+const sourceCommand = `uv sync
+uv run speekify setup`;
+
+const pypiCommand = `# Not live yet — available once Speekify is published to PyPI
+pip install speekify        # or: pipx install speekify
+uv tool install speekify    # uv users
+speekify setup`;
+---
+
+<section id="install" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+	<div class="max-w-3xl">
+		<h2>Install Speekify.</h2>
+		<p class="text-muted-foreground mt-4 text-lg">Homebrew and from-source work today. PyPI is coming.</p>
+	</div>
+
+	<div class="mx-auto mt-10 flex max-w-2xl flex-col gap-6">
+		<CodeBlock label="macOS — Homebrew (no Python or uv required)" code={brewCommand} />
+		<CodeBlock label="From source (uv)" code={sourceCommand} />
+		<CodeBlock label="pip / pipx / uv — once published to PyPI" code={pypiCommand} />
+	</div>
+
+	<p class="text-muted-foreground mx-auto mt-6 max-w-2xl text-sm">
+		Run speekify setup once after installing. It downloads and warms the local Supertonic model (and, by default, the
+		English→French translation model). Skip it and the models download automatically on first use.
+	</p>
+</section>

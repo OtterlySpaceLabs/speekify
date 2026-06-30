@@ -163,7 +163,7 @@
   :root {
     --font-heading: var(--font-delius-swash-caps);
     --font-body: var(--font-delius-swash-caps);
-    --font-mono: var(--font-delius-swash-caps);
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     }
   h1 {
     font-family: var(--font-heading);

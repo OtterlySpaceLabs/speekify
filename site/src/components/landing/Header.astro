@@ -1,0 +1,64 @@
+---
+import { buttonVariants } from "@/components/ui/button";
+
+const repo = "https://github.com/OtterlySpaceLabs/speekify";
+
+const navLinks = [
+	{ href: "#how", label: "How it works" },
+	{ href: "#cli", label: "CLI" },
+	{ href: "#mcp", label: "MCP" },
+	{ href: "#install", label: "Install" },
+];
+---
+
+<header class="bg-background/80 border-border sticky top-0 z-50 h-16 border-b backdrop-blur">
+	<div class="mx-auto flex h-full max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
+		<a href="#top" class="text-lg font-semibold">Speekify</a>
+
+		<nav class="text-muted-foreground flex items-center gap-6 text-sm max-md:hidden">
+			{
+				navLinks.map((link) => (
+					<a href={link.href} class="hover:text-foreground transition">
+						{link.label}
+					</a>
+				))
+			}
+		</nav>
+
+		<div class="flex items-center gap-4">
+			<a href={repo} class="text-muted-foreground hover:text-foreground text-sm max-md:hidden">GitHub</a>
+			<a href="#install" class={buttonVariants({ size: "sm" })}>Get started</a>
+
+			<details class="relative md:hidden">
+				<summary class="text-muted-foreground hover:text-foreground flex size-8 cursor-pointer list-none items-center justify-center">
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						class="size-5"
+						aria-hidden="true"
+					>
+						<line x1="4" x2="20" y1="6" y2="6"></line>
+						<line x1="4" x2="20" y1="12" y2="12"></line>
+						<line x1="4" x2="20" y1="18" y2="18"></line>
+					</svg>
+					<span class="sr-only">Menu</span>
+				</summary>
+				<div class="bg-card border-border absolute top-full right-0 mt-2 flex w-44 flex-col gap-1 rounded-lg border p-2 text-sm shadow-lg">
+					{
+						navLinks.map((link) => (
+							<a href={link.href} class="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md px-3 py-2 transition">
+								{link.label}
+							</a>
+						))
+					}
+					<a href={repo} class="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md px-3 py-2 transition">GitHub</a>
+				</div>
+			</details>
+		</div>
+	</div>
+</header>

@@ -1,0 +1,32 @@
+---
+import Card from "@/components/landing/Card.astro";
+---
+
+<section id="what" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+	<div class="max-w-3xl">
+		<h2>One command, many sources, a file you can play anywhere.</h2>
+		<p class="text-muted-foreground mt-4 text-lg">
+			Speekify reads from where your content already lives and writes a plain audio file.
+		</p>
+	</div>
+
+	<div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+		<Card title="Many input sources">
+			Inline text, stdin, local .txt/.md/.pdf files, readable URLs, and YouTube transcripts. Auto-detected.
+		</Card>
+		<Card title="Local synthesis">
+			Audio is generated on your machine with Supertonic v3. No audio leaves your computer.
+		</Card>
+		<Card title="Multilingual">
+			en, fr, de, es, it, pt, ja, ko, and more, plus na for language-agnostic synthesis. English input is
+			auto-translated to French when you synthesize in French.
+		</Card>
+		<Card title="Voice control">
+			10 built-in voices (M1–M5, F1–F5), custom Voice Builder JSON styles, plus speed and synthesis-step tuning.
+		</Card>
+		<Card title="MCP server">
+			Expose Speekify as a tool so AI assistants can generate audio inside your automations.
+		</Card>
+		<Card title="Open source">MIT licensed. Read the code, file an issue, send a patch.</Card>
+	</div>
+</section>

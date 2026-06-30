@@ -1,0 +1,35 @@
+---
+import { buttonVariants } from "@/components/ui/button";
+import CodeBlock from "@/components/landing/CodeBlock.astro";
+
+const examples = [
+	{ label: "Inline text", code: 'speekify "Hello world"' },
+	{ label: "A readable web article", code: 'speekify "https://example.com/article"' },
+	{ label: "A local PDF", code: "speekify ~/Documents/article.pdf" },
+	{
+		label: "A YouTube video (quote URLs with ? or &)",
+		code: 'speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"',
+	},
+	{ label: "Pipe text from stdin", code: "printf 'Hello from stdin' | speekify" },
+	{ label: "Pick a voice and output folder", code: 'speekify --voice F2 --output-dir ~/Desktop "Hello world"' },
+];
+---
+
+<section id="cli" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+	<div class="max-w-3xl">
+		<h2>Real commands, copy-paste ready.</h2>
+		<p class="text-muted-foreground mt-4 text-lg">
+			Every example works with the installed binary, or with uv run speekify … from a source checkout.
+		</p>
+	</div>
+
+	<div class="mt-10 grid gap-4 md:grid-cols-2">
+		{examples.map((example) => <CodeBlock label={example.label} code={example.code} />)}
+	</div>
+
+	<div class="mt-6">
+		<a href="https://github.com/OtterlySpaceLabs/speekify/blob/main/docs/usage.md" class={buttonVariants({ variant: "link" })}>
+			Full command reference →
+		</a>
+	</div>
+</section>
