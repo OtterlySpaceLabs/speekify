@@ -1,0 +1,82 @@
+---
+import "@/styles/global.css";
+import { getContent, type Lang } from "@/i18n/content";
+import { getAlternates } from "@/i18n/utils";
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const lang = (Astro.currentLocale ?? "en") as Lang;
+const t = getContent(lang);
+const { title = t.meta.title, description = t.meta.description } = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const alternates = getAlternates(Astro.url.pathname, lang);
+const xDefault = alternates.find((a) => a.locale === "en")!.abs;
+const ogImage = new URL(`${base}/og.svg`, Astro.site).href;
+const ogLocale = lang === "fr" ? "fr_FR" : "en_US";
+const altLocale = lang === "fr" ? "en_US" : "fr_FR";
+
+const jsonLd = {
+	"@context": "https://schema.org",
+	"@type": "SoftwareApplication",
+	name: "Speekify",
+	applicationCategory: "DeveloperApplication",
+	operatingSystem: "macOS, Linux, Windows",
+	description,
+	url: canonical,
+	image: ogImage,
+	inLanguage: lang,
+	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+	license: "https://opensource.org/licenses/MIT",
+	author: { "@type": "Organization", name: "Otterly Space Labs", url: "https://github.com/OtterlySpaceLabs" },
+};
+---
+
+<html lang={lang}>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+		<link rel="icon" href={`${base}/favicon.ico`} />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<meta name="author" content="Otterly Space Labs" />
+		<meta name="robots" content="index, follow, max-image-preview:large" />
+		<meta name="theme-color" content="#f5f1e6" />
+		<link rel="canonical" href={canonical} />
+		<link rel="manifest" href={`${base}/site.webmanifest`} />
+
+		{alternates.map((a) => <link rel="alternate" hreflang={a.locale} href={a.abs} />)}
+		<link rel="alternate" hreflang="x-default" href={xDefault} />
+		<link rel="sitemap" type="application/xml" title="Sitemap" href={`${base}/sitemap-index.xml`} />
+
+		<meta property="og:site_name" content="Speekify" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={ogImage} />
+		<meta property="og:image:type" content="image/svg+xml" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="Speekify" />
+		<meta property="og:locale" content={ogLocale} />
+		<meta property="og:locale:alternate" content={altLocale} />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImage} />
+		<meta name="twitter:image:alt" content="Speekify" />
+
+		<script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+	</head>
+	<body>
+		<slot />
+	</body>
+</html>

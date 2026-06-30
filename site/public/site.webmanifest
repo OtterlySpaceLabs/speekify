@@ -1,0 +1,13 @@
+{
+	"name": "Speekify",
+	"short_name": "Speekify",
+	"description": "Open-source CLI that turns text into local audio from your terminal.",
+	"start_url": "/speekify/",
+	"scope": "/speekify/",
+	"display": "standalone",
+	"background_color": "#1a1714",
+	"theme_color": "#f5f1e6",
+	"icons": [
+		{ "src": "/speekify/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+	]
+}

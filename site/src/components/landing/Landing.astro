@@ -1,0 +1,30 @@
+---
+import Header from "@/components/landing/Header.astro";
+import Hero from "@/components/landing/Hero.tsx";
+import Why from "@/components/landing/Why.tsx";
+import What from "@/components/landing/What.tsx";
+import HowItWorks from "@/components/landing/HowItWorks.tsx";
+import CliUsage from "@/components/landing/CliUsage.tsx";
+import Mcp from "@/components/landing/Mcp.tsx";
+import UseCases from "@/components/landing/UseCases.tsx";
+import Install from "@/components/landing/Install.tsx";
+import OpenSource from "@/components/landing/OpenSource.tsx";
+import Footer from "@/components/landing/Footer.tsx";
+import { getContent, type Lang } from "@/i18n/content";
+
+const t = getContent(Astro.currentLocale as Lang);
+---
+
+<Header />
+<main>
+	<Hero client:load content={t.hero} />
+	<Why client:visible content={t.why} />
+	<What client:visible content={t.what} />
+	<HowItWorks client:visible content={t.how} />
+	<CliUsage client:visible content={t.cli} />
+	<Mcp client:visible content={t.mcp} />
+	<UseCases client:visible content={t.useCases} />
+	<Install client:visible content={t.install} />
+	<OpenSource client:visible content={t.openSource} />
+</main>
+<Footer client:visible content={t.footer} />

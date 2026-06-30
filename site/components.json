@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "radix-vega",
+  "style": "radix-nova",
   "rsc": false,
   "tsx": true,
   "tailwind": {
@@ -10,7 +10,7 @@
     "cssVariables": true,
     "prefix": ""
   },
-  "iconLibrary": "hugeicons",
+  "iconLibrary": "tabler",
   "rtl": false,
   "aliases": {
     "components": "@/components",
@@ -23,8 +23,8 @@
   "menuAccent": "subtle",
   "registries": {
     "@shadcn-studio": "https://shadcnstudio.com/r/radix-nova/{name}.json",
-    "@ss-components": "https://shadcnstudio.com/r/radix-nova/{name}.json",
-    "@ss-blocks": "https://shadcnstudio.com/r/radix-nova/{name}.json",
-    "@ss-themes": "https://shadcnstudio.com/r/radix-nova/{name}.json"
+    "@ss-components": "https://shadcnstudio.com/r/components/radix-nova/{name}.json?email=${EMAIL}&license_key=${LICENSE_KEY}",
+    "@ss-blocks": "https://shadcnstudio.com/r/blocks/radix-nova/{name}.json?email=${EMAIL}&license_key=${LICENSE_KEY}",
+    "@ss-themes": "https://shadcnstudio.com/r/themes/{name}.json?email=${EMAIL}&license_key=${LICENSE_KEY}"
   }
 }
