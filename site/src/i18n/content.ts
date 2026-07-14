@@ -9,9 +9,9 @@ export const defaultLang: Lang = "en";
 
 const en = {
 	meta: {
-		title: "Speekify — Turn text into local audio from your terminal",
+		title: "Speekify — Local text-to-speech CLI for articles, PDFs and YouTube",
 		description:
-			"Speekify is an open-source CLI that turns articles, PDFs, YouTube transcripts, and piped text into a local audio file, synthesized on your own machine. Multilingual, with an MCP server for AI workflows.",
+			"Speekify is an open-source local text-to-speech CLI that converts articles, PDFs, YouTube transcripts, files and stdin into private WAV audio with Supertonic v3.",
 	},
 	nav: {
 		how: "How it works",
@@ -23,12 +23,13 @@ const en = {
 		menu: "Menu",
 	},
 	hero: {
-		badge: "Local TTS",
-		badgeText: "Runs locally with Supertonic v3 — no audio leaves your machine",
-		title: "Turn anything you'd read into something you can hear.",
+		badge: "Open-source local text-to-speech CLI",
+		badgeText: "Open source · private by design · yours to keep",
+		title: "Articles, PDFs, videos: everything becomes audio.",
+		titleAccent: "Listen wherever you want.",
 		description:
-			"Speekify is an open-source CLI that converts articles, PDFs, YouTube transcripts, and piped text into a local audio file — synthesized on your own machine. Nothing you read leaves your computer.",
-		getStarted: "Get started",
+			"Speekify converts articles, text-based PDFs, YouTube transcripts, local files and stdin into natural WAV audio on your own machine — no account, no cloud, no lock-in.",
+		getStarted: "Create your first audio",
 		viewGithub: "View on GitHub",
 		caption: "Output is a .wav file in your current folder.",
 	},
@@ -46,8 +47,8 @@ const en = {
 		],
 	},
 	what: {
-		title: "One command, many sources, a file you can play anywhere.",
-		subtitle: "Speekify reads from where your content already lives and writes a plain audio file.",
+		title: "Everything you saved for later. Finally listenable.",
+		subtitle: "Keep your habits. Paste the source you already have; Speekify hands you back an audio file you actually own.",
 		cards: [
 			{
 				title: "Many input sources",
@@ -98,8 +99,8 @@ const en = {
 		],
 	},
 	cli: {
-		title: "Real commands, copy-paste ready.",
-		subtitle: "Every example works with the installed binary, or with uv run speekify … from a source checkout.",
+		title: "Your reading queue, one command lighter.",
+		subtitle: "No dashboard to learn. Point Speekify at what matters, press Enter, and take the result with you.",
 		labels: [
 			"Inline text",
 			"A readable web article",
@@ -111,9 +112,9 @@ const en = {
 		fullRef: "Full command reference →",
 	},
 	mcp: {
-		title: "Let your AI assistant make the audio.",
+		title: "Give your automations a voice.",
 		subtitle:
-			"Speekify ships a local Model Context Protocol server, so assistants can call it as a tool inside their automations.",
+			"Your assistant can turn a briefing, a recap, or a research trail into audio while the entire synthesis stays on your machine.",
 		body: "Start the server with one command and Speekify becomes available to MCP-capable clients — Claude Code, GitHub Copilot, Codex, and OpenAI's remote MCP. The server exposes speekify_generate_wav (text, URL, or file → WAV with structured details), speekify_generation_defaults (supported voices, languages, and ranges), and a news_recap_to_audio prompt template. The audio is still generated locally on your machine.",
 		startLabel: "Start the MCP server",
 		addLabel: "Add to Claude Code",
@@ -145,22 +146,52 @@ const en = {
 		],
 	},
 	install: {
-		title: "Install Speekify.",
-		subtitle: "Homebrew, from source, or from PyPI — all work today.",
+		title: "Your first listen starts here.",
+		subtitle: "Choose your route. In a few minutes, your next read can leave the screen with you.",
 		brewLabel: "macOS — Homebrew (no Python or uv required)",
 		sourceLabel: "From source (uv)",
 		pypiLabel: "pip / pipx / uv — from PyPI",
-		note: "Run speekify setup once after installing. It downloads and warms the local Supertonic model (and, by default, the English→French translation model). Skip it and the models download automatically on first use.",
+		note: "Install Speekify, run setup once, then turn your first link into audio. The local models are downloaded and warmed automatically; every listen after that stays ready on your machine.",
 	},
 	openSource: {
 		badge: "MIT Licensed",
-		title: "Open source, MIT licensed.",
-		body: "Speekify is built by Otterly Space Labs and released under the MIT license. The code is on GitHub — read it, open an issue, or send a pull request. If it's useful to you, a star helps other people find it.",
-		star: "Star on GitHub",
+		title: "Use it today. Shape what comes next.",
+		body: "Speekify is built in the open under the MIT license. Inspect every line, propose the voice or workflow you need, and help make local audio useful to more people.",
+		star: "Join the project on GitHub",
 		report: "Report an issue",
 	},
+	faq: {
+		title: "Questions, answered before the install.",
+		subtitle: "The practical details about local text-to-speech, supported sources, privacy, voices, and AI integrations.",
+		items: [
+			{
+				question: "What is Speekify?",
+				answer: "Speekify is an open-source command-line text-to-speech tool. It extracts readable text from inline input, stdin, local text files, text-based PDFs, web articles, and YouTube transcripts, then creates a local WAV file with Supertonic v3.",
+			},
+			{
+				question: "Does Speekify send my documents to the cloud?",
+				answer: "No. Voice synthesis runs on your machine and the generated WAV stays local. When you provide a web or YouTube URL, Speekify must retrieve that public source, but it does not upload your extracted text to a remote speech service.",
+			},
+			{
+				question: "Which inputs and audio formats are supported?",
+				answer: "Speekify accepts inline text, piped stdin, .txt and .md files, text-based PDFs, readable web URLs, and YouTube transcripts. It currently writes standard WAV audio files.",
+			},
+			{
+				question: "Which languages and voices are available?",
+				answer: "Speekify auto-detects the source language and supports many Supertonic languages, including English, French, German, Spanish, Italian, Portuguese, Japanese, and Korean. Ten built-in voices are available, plus custom Voice Builder JSON styles.",
+			},
+			{
+				question: "Can an AI assistant use Speekify?",
+				answer: "Yes. The built-in MCP server exposes local audio generation as a tool for compatible clients such as Claude Code, Codex, and GitHub Copilot, while synthesis remains on your computer.",
+			},
+			{
+				question: "How do I install Speekify?",
+				answer: "Install the standalone Homebrew package on macOS, or install the Python package with pipx or uv. Run speekify setup once to download and warm the local speech model, then pass text, a file, or a URL to the speekify command.",
+			},
+		],
+	},
 	footer: {
-		tagline: "Open-source CLI that turns text into local audio.",
+		tagline: "Your reading, in motion — open source and made locally.",
 		links: ["GitHub", "Documentation", "CLI Reference", "MCP Setup"],
 		license: "MIT License · © 2026 Otterly Space SARL",
 		disclaimer:
@@ -172,9 +203,9 @@ type Content = typeof en;
 
 const fr: Content = {
 	meta: {
-		title: "Speekify — Transformez du texte en audio local depuis votre terminal",
+		title: "Speekify — Synthèse vocale locale pour articles, PDF et YouTube",
 		description:
-			"Speekify est un CLI open source qui transforme articles, PDF, transcriptions YouTube et texte redirigé en fichier audio local, synthétisé sur votre propre machine. Multilingue, avec un serveur MCP pour vos workflows IA.",
+			"Speekify, CLI open source de synthèse vocale locale, convertit articles, PDF, transcriptions YouTube, fichiers et stdin en audio WAV privé avec Supertonic v3.",
 	},
 	nav: {
 		how: "Fonctionnement",
@@ -186,12 +217,13 @@ const fr: Content = {
 		menu: "Menu",
 	},
 	hero: {
-		badge: "TTS local",
-		badgeText: "Fonctionne en local avec Supertonic v3 — aucun audio ne quitte votre machine",
-		title: "Transformez tout ce que vous liriez en quelque chose à écouter.",
+		badge: "CLI open source de synthèse vocale locale",
+		badgeText: "Open source · privé par conception · à vous pour toujours",
+		title: "Articles, PDF, vidéos : tout devient audio.",
+		titleAccent: "Écoutez-les où vous voulez.",
 		description:
-			"Speekify est un CLI open source qui convertit articles, PDF, transcriptions YouTube et texte redirigé en fichier audio local — synthétisé sur votre propre machine. Rien de ce que vous lisez ne quitte votre ordinateur.",
-		getStarted: "Commencer",
+			"Speekify convertit articles, PDF textuels, transcriptions YouTube, fichiers locaux et stdin en audio WAV naturel sur votre propre machine — sans compte, sans cloud, sans dépendance.",
+		getStarted: "Créer mon premier audio",
 		viewGithub: "Voir sur GitHub",
 		caption: "Le résultat est un fichier .wav dans votre dossier courant.",
 	},
@@ -209,8 +241,8 @@ const fr: Content = {
 		],
 	},
 	what: {
-		title: "Une commande, de multiples sources, un fichier lisible partout.",
-		subtitle: "Speekify lit là où votre contenu se trouve déjà et écrit un simple fichier audio.",
+		title: "Tout ce que vous gardez pour plus tard. Enfin écoutable.",
+		subtitle: "Ne changez pas vos habitudes. Donnez la source que vous avez déjà ; Speekify vous rend un fichier audio qui vous appartient vraiment.",
 		cards: [
 			{
 				title: "De multiples sources",
@@ -261,8 +293,8 @@ const fr: Content = {
 		],
 	},
 	cli: {
-		title: "De vraies commandes, prêtes à copier-coller.",
-		subtitle: "Chaque exemple fonctionne avec le binaire installé, ou avec uv run speekify … depuis une copie des sources.",
+		title: "Votre pile de lecture, une commande plus légère.",
+		subtitle: "Aucun tableau de bord à apprendre. Indiquez ce qui compte, appuyez sur Entrée et emportez le résultat.",
 		labels: [
 			"Texte en ligne",
 			"Un article web lisible",
@@ -274,9 +306,9 @@ const fr: Content = {
 		fullRef: "Référence complète des commandes →",
 	},
 	mcp: {
-		title: "Laissez votre assistant IA générer l'audio.",
+		title: "Donnez une voix à vos automatisations.",
 		subtitle:
-			"Speekify embarque un serveur Model Context Protocol local, pour que les assistants l'appellent comme un outil dans leurs automatisations.",
+			"Votre assistant peut transformer un briefing, un récapitulatif ou une veille en audio, tandis que toute la synthèse reste sur votre machine.",
 		body: "Démarrez le serveur d'une seule commande et Speekify devient disponible pour les clients compatibles MCP — Claude Code, GitHub Copilot, Codex et le MCP distant d'OpenAI. Le serveur expose speekify_generate_wav (texte, URL ou fichier → WAV avec détails structurés), speekify_generation_defaults (voix, langues et plages prises en charge), et un modèle de prompt news_recap_to_audio. L'audio reste généré localement sur votre machine.",
 		startLabel: "Démarrer le serveur MCP",
 		addLabel: "Ajouter à Claude Code",
@@ -308,22 +340,52 @@ const fr: Content = {
 		],
 	},
 	install: {
-		title: "Installez Speekify.",
-		subtitle: "Homebrew, depuis les sources ou depuis PyPI — tout fonctionne dès aujourd'hui.",
+		title: "Votre première écoute commence ici.",
+		subtitle: "Choisissez votre méthode. Dans quelques minutes, votre prochaine lecture pourra quitter l’écran avec vous.",
 		brewLabel: "macOS — Homebrew (ni Python ni uv requis)",
 		sourceLabel: "Depuis les sources (uv)",
 		pypiLabel: "pip / pipx / uv — depuis PyPI",
-		note: "Lancez speekify setup une fois après l'installation. Il télécharge et préchauffe le modèle Supertonic local (et, par défaut, le modèle de traduction anglais→français). Sautez cette étape et les modèles se téléchargeront automatiquement à la première utilisation.",
+		note: "Installez Speekify, lancez la configuration une fois, puis transformez votre premier lien en audio. Les modèles locaux sont téléchargés et préchauffés automatiquement ; chaque écoute suivante reste prête sur votre machine.",
 	},
 	openSource: {
 		badge: "Sous licence MIT",
-		title: "Open source, sous licence MIT.",
-		body: "Speekify est développé par Otterly Space Labs et publié sous licence MIT. Le code est sur GitHub — lisez-le, ouvrez une issue ou envoyez une pull request. S'il vous est utile, une étoile aide d'autres personnes à le trouver.",
-		star: "Mettre une étoile sur GitHub",
+		title: "Utilisez-le aujourd’hui. Façonnez la suite.",
+		body: "Speekify est construit en public sous licence MIT. Inspectez chaque ligne, proposez la voix ou le workflow dont vous avez besoin et aidez l’audio local à devenir utile à davantage de personnes.",
+		star: "Rejoindre le projet sur GitHub",
 		report: "Signaler un problème",
 	},
+	faq: {
+		title: "Les réponses utiles avant l’installation.",
+		subtitle: "L’essentiel sur la synthèse vocale locale, les sources compatibles, la confidentialité, les voix et les intégrations IA.",
+		items: [
+			{
+				question: "Qu’est-ce que Speekify ?",
+				answer: "Speekify est un outil open source de synthèse vocale en ligne de commande. Il extrait le texte lisible depuis une saisie directe, stdin, des fichiers texte, des PDF textuels, des articles web et des transcriptions YouTube, puis crée un fichier WAV local avec Supertonic v3.",
+			},
+			{
+				question: "Speekify envoie-t-il mes documents dans le cloud ?",
+				answer: "Non. La synthèse vocale s’exécute sur votre machine et le WAV généré reste local. Lorsque vous fournissez une URL web ou YouTube, Speekify récupère cette source publique, mais n’envoie pas le texte extrait à un service vocal distant.",
+			},
+			{
+				question: "Quels formats d’entrée et de sortie sont compatibles ?",
+				answer: "Speekify accepte le texte en ligne, stdin, les fichiers .txt et .md, les PDF textuels, les URL d’articles lisibles et les transcriptions YouTube. Il produit actuellement des fichiers audio WAV standard.",
+			},
+			{
+				question: "Quelles langues et voix sont disponibles ?",
+				answer: "Speekify détecte automatiquement la langue source et prend en charge de nombreuses langues Supertonic, dont le français, l’anglais, l’allemand, l’espagnol, l’italien, le portugais, le japonais et le coréen. Dix voix intégrées sont disponibles, ainsi que des styles JSON Voice Builder personnalisés.",
+			},
+			{
+				question: "Un assistant IA peut-il utiliser Speekify ?",
+				answer: "Oui. Le serveur MCP intégré expose la génération audio locale comme outil pour les clients compatibles, notamment Claude Code, Codex et GitHub Copilot, tandis que la synthèse reste sur votre ordinateur.",
+			},
+			{
+				question: "Comment installer Speekify ?",
+				answer: "Installez le paquet autonome avec Homebrew sur macOS, ou le paquet Python avec pipx ou uv. Lancez speekify setup une fois pour télécharger et préchauffer le modèle vocal local, puis passez du texte, un fichier ou une URL à la commande speekify.",
+			},
+		],
+	},
 	footer: {
-		tagline: "CLI open source qui transforme du texte en audio local.",
+		tagline: "Vos lectures en mouvement — open source et créées en local.",
 		links: ["GitHub", "Documentation", "Référence CLI", "Configuration MCP"],
 		license: "Licence MIT · © 2026 Otterly Space SARL",
 		disclaimer:

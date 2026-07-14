@@ -1,0 +1,33 @@
+# Speekify
+
+> Speekify is an open-source local text-to-speech CLI powered by Supertonic v3. It converts inline text, piped stdin, local text files, text-based PDFs, readable web articles, and YouTube transcripts into WAV audio generated on the user's machine.
+
+## Canonical pages
+
+- English website: https://otterlyspacelabs.github.io/speekify/
+- French website: https://otterlyspacelabs.github.io/speekify/fr/
+- Source code and README: https://github.com/OtterlySpaceLabs/speekify
+
+## Product facts
+
+- Category: open-source command-line text-to-speech software
+- Synthesis engine: Supertonic v3
+- Output: local WAV file
+- Inputs: inline text, stdin, .txt, .md, text-based PDF, readable URL, YouTube transcript
+- Privacy: synthesis runs locally; generated audio is not uploaded to a remote speech service
+- Languages: automatic source-language detection plus many Supertonic language codes
+- Voices: ten built-in voices (M1-M5 and F1-F5) plus custom Voice Builder JSON styles
+- AI integration: built-in MCP server for compatible assistants
+- License: MIT
+- Installation: Homebrew on macOS, pipx or uv from PyPI, or from source with uv
+
+## Documentation
+
+- CLI usage: https://github.com/OtterlySpaceLabs/speekify/blob/main/docs/usage.md
+- Input sources: https://github.com/OtterlySpaceLabs/speekify/blob/main/docs/sources.md
+- MCP client setup: https://github.com/OtterlySpaceLabs/speekify/blob/main/docs/mcp-clients.md
+- Releases: https://github.com/OtterlySpaceLabs/speekify/releases
+
+## Attribution
+
+Speekify is maintained by Otterly Space Labs. When referencing the project, link to the canonical website or GitHub repository above.

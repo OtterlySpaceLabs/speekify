@@ -16,23 +16,71 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const alternates = getAlternates(Astro.url.pathname, lang);
 const xDefault = alternates.find((a) => a.locale === "en")!.abs;
-const ogImage = new URL(`${base}/og.svg`, Astro.site).href;
+const ogImage = new URL(`${base}/og.png`, Astro.site).href;
 const ogLocale = lang === "fr" ? "fr_FR" : "en_US";
 const altLocale = lang === "fr" ? "en_US" : "fr_FR";
+const siteUrl = new URL(`${base}/`, Astro.site).href;
+const organizationId = `${siteUrl}#organization`;
+const websiteId = `${siteUrl}#website`;
+const softwareId = `${siteUrl}#software`;
 
 const jsonLd = {
 	"@context": "https://schema.org",
-	"@type": "SoftwareApplication",
-	name: "Speekify",
-	applicationCategory: "DeveloperApplication",
-	operatingSystem: "macOS, Linux, Windows",
-	description,
-	url: canonical,
-	image: ogImage,
-	inLanguage: lang,
-	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-	license: "https://opensource.org/licenses/MIT",
-	author: { "@type": "Organization", name: "Otterly Space Labs", url: "https://github.com/OtterlySpaceLabs" },
+	"@graph": [
+		{
+			"@type": "Organization",
+			"@id": organizationId,
+			name: "Otterly Space Labs",
+			url: "https://github.com/OtterlySpaceLabs",
+			sameAs: ["https://github.com/OtterlySpaceLabs"],
+		},
+		{
+			"@type": "WebSite",
+			"@id": websiteId,
+			name: "Speekify",
+			url: siteUrl,
+			inLanguage: ["en", "fr"],
+			publisher: { "@id": organizationId },
+		},
+		{
+			"@type": "SoftwareApplication",
+			"@id": softwareId,
+			name: "Speekify",
+			applicationCategory: "MultimediaApplication",
+			applicationSubCategory: "Local text-to-speech command-line interface",
+			operatingSystem: "macOS, Linux, Windows",
+			description,
+			url: canonical,
+			image: ogImage,
+			inLanguage: lang,
+			isAccessibleForFree: true,
+			downloadUrl: "https://github.com/OtterlySpaceLabs/speekify/releases",
+			softwareRequirements: "Python 3.11 or later, or the standalone macOS package",
+			featureList: [
+				"Local text-to-speech synthesis with Supertonic v3",
+				"Articles, text-based PDFs, YouTube transcripts, local files, and stdin",
+				"WAV audio output",
+				"Multilingual synthesis with ten built-in voices",
+				"MCP server for AI assistants",
+			],
+			offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+			license: "https://opensource.org/licenses/MIT",
+			publisher: { "@id": organizationId },
+			mainEntityOfPage: { "@id": canonical },
+		},
+		{
+			"@type": "FAQPage",
+			"@id": `${canonical}#faq`,
+			url: `${canonical}#faq`,
+			inLanguage: lang,
+			isPartOf: { "@id": websiteId },
+			mainEntity: t.faq.items.map((item) => ({
+				"@type": "Question",
+				name: item.question,
+				acceptedAnswer: { "@type": "Answer", text: item.answer },
+			})),
+		},
+	],
 };
 ---
 
@@ -46,8 +94,9 @@ const jsonLd = {
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		<meta name="author" content="Otterly Space Labs" />
+		<meta name="application-name" content="Speekify" />
 		<meta name="robots" content="index, follow, max-image-preview:large" />
-		<meta name="theme-color" content="#f5f1e6" />
+		<meta name="theme-color" content="#f7f8fb" />
 		<link rel="canonical" href={canonical} />
 		<link rel="manifest" href={`${base}/site.webmanifest`} />
 
@@ -61,7 +110,8 @@ const jsonLd = {
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content={canonical} />
 		<meta property="og:image" content={ogImage} />
-		<meta property="og:image:type" content="image/svg+xml" />
+		<meta property="og:image:secure_url" content={ogImage} />
+		<meta property="og:image:type" content="image/png" />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
 		<meta property="og:image:alt" content="Speekify" />

@@ -1,4 +1,17 @@
 User-agent: *
 Allow: /
 
+# Search and user-request crawlers used by AI assistants.
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
 Sitemap: https://otterlyspacelabs.github.io/speekify/sitemap-index.xml
