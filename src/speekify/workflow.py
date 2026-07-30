@@ -43,6 +43,7 @@ class GenerationRequest:
     title: str = ""
     is_url_mode: bool = False
     output_dir: Path = Path.cwd()
+    output_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,9 @@ class GenerationResult:
     output_path: Path
     artifact: SynthesisArtifact
     content: ExtractedContent
+    warnings: tuple[str, ...] = ()
+    diagnostic_report_path: Path | None = None
+    text_length: int | None = None
 
 
 @dataclass(frozen=True)
@@ -224,7 +228,7 @@ async def generate_audio(
     )
 
     output_title = request.title or content.best_title()
-    output_path = build_output_path(request.output_dir, output_title)
+    output_path = request.output_path or build_output_path(request.output_dir, output_title)
     logger.info(
         "Prepared output title=%r path=%s normalized_text_length=%s",
         output_title,

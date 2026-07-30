@@ -5,8 +5,10 @@ class Speekify < Formula
   sha256 "1b3ad11e4721d543e692a1354ff636becf4b7c6bd52c6e950064953a1da15215"
   version "0.1.2"
 
+  depends_on "temporal"
+
   def install
-    # onedir build: the launcher needs its sibling _internal/ folder,
+    # Homebrew payload: the launcher needs its sibling _internal/ folder,
     # so install the whole dir into libexec and symlink the launcher.
     libexec.install "speekify"
     bin.install_symlink libexec/"speekify/speekify"

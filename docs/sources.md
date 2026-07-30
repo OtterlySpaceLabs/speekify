@@ -8,6 +8,12 @@ audio. For the command list and options, see the [CLI reference](usage.md).
 Speekify accepts inline text, piped stdin, a local file path, or a URL as its
 source, and auto-detects which one you gave it.
 
+The `speekify batch` command also accepts directories and recursively expands
+all supported documents into independent audio jobs. Expansion is stable-sorted,
+deduplicated, limited to 1,000 items and 50 MiB per file, and does not follow
+symlinks. Unsupported entries found inside a directory are skipped with a
+warning; an explicitly supplied unsupported file or symlink is an error.
+
 | Source | How it's detected | Notes |
 |---|---|---|
 | Inline text | Default when the source isn't a file or URL | Quote multi-word text. |
@@ -48,7 +54,26 @@ text.
 
 ## Errors and logs
 
-- If generation fails, the terminal shows a short user-focused error. Add
-  `--verbose` to include the technical log path (`logs/speekify.log`).
-- Each CLI run maintains `logs/speekify.log` automatically and prunes log
-  entries older than 14 days at startup.
+- If generation fails, the terminal shows a short user-focused error and the
+  path of a redacted diagnostic report when available.
+- Runtime logs live in the platform Speekify data directory
+  (`~/Library/Application Support/Speekify/runtime` on macOS or
+  `${XDG_DATA_HOME:-~/.local/share}/speekify/runtime` on Linux), not in the
+  current working directory. Entries older than 14 days are pruned when the
+  logger is configured.
+- Successful ordinary runs do not produce a final report. Failures,
+  synthesis warnings, recovered prepared/audio artifacts and `--verbose` runs do.
+
+## Local storage and network use
+
+Speekify stores Temporal's SQLite database, workflow receipts, prepared text,
+batch manifests, diagnostics and runtime locks under the platform data
+directory. `SPEEKIFY_DATA_DIR` overrides that location. The local Temporal
+service is headless, listens only on `127.0.0.1`, disables telemetry/newsfeed,
+and stops after five minutes without a client or running workflow. Its on-disk
+state is reused the next time generation starts it.
+
+Text/file preparation and speech synthesis run locally. Network access happens
+only when required by the selected input or installation path: fetching
+web/YouTube content, downloading the Supertonic or translation models, and
+provisioning the pinned Temporal CLI on the first pip/pipx/uv generation.

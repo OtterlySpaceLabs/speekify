@@ -10,6 +10,7 @@ const codes = [
 	'speekify --lang fr "https://www.youtube.com/watch?v=eSP7PLTXNy8"',
 	"printf 'Hello from stdin' | speekify",
 	'speekify --voice F2 --output-dir ~/Desktop "Hello world"',
+	"speekify batch article.pdf https://example.com ./notes",
 ];
 
 interface CliContent {

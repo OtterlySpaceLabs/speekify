@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
 arch="$(uname -m)"
-archive_name="speekify-macos-${arch}.tar.gz"
+archive_name="speekify-homebrew-macos-${arch}.tar.gz"
 
 uv sync --group dev
 # ponytail: --onedir (not --onefile) so launch doesn't re-extract the whole
@@ -22,11 +22,15 @@ uv run pyinstaller \
   --collect-all supertonic \
   --collect-all trafilatura \
   --collect-all transformers \
+  --collect-all temporalio \
   --collect-all sentencepiece \
   --collect-all langdetect \
   src/speekify/__main__.py
 
-# ponytail: wipe stale staging first — a leftover dist/release/speekify (esp. an
+# ponytail: this archive is an implementation payload consumed only by the
+# Homebrew formula. Temporal is deliberately not bundled: Homebrew owns it via
+# the formula's declared `depends_on "temporal"` dependency.
+# Wipe stale staging first — a leftover dist/release/speekify (esp. an
 # old onefile binary as a *file*) makes `cp -R` nest/conflict ("Not a directory").
 rm -rf dist/release
 mkdir -p dist/release

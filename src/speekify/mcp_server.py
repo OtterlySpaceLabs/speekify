@@ -18,7 +18,7 @@ from speekify.config import (
     SUPPORTED_TTS_LANGUAGES,
     VOICE_NAMES,
 )
-from speekify.application import build_generation_request, run_generation
+from speekify.application import build_generation_request, run_batch, run_generation
 from speekify.logging_utils import configure_logger
 from speekify.workflow import GenerationRequest, GenerationResult
 
@@ -81,8 +81,64 @@ async def generate_wav(
     return _serialize_generation(request, generation, log_path=log_path)
 
 
+async def generate_batch_wav(
+    sources: list[str],
+    *,
+    voice: str = DEFAULT_VOICE,
+    custom_style_path: str | None = None,
+    language_code: str = AUTO_TTS_LANGUAGE,
+    speed: float = DEFAULT_SPEED,
+    steps: int = DEFAULT_STEPS,
+    max_chunk_length: int | None = None,
+    silence_duration: float = DEFAULT_SILENCE_DURATION,
+    english_islands: bool = True,
+    english_lexicon_path: str | None = None,
+    output_dir: str | None = None,
+    use_user_config: bool = True,
+    verbose: bool = False,
+) -> dict[str, object]:
+    """Generate one WAV per source using Speekify's local reliable batch runtime."""
+    if not sources:
+        raise ValueError("At least one batch source is required.")
+    template = build_generation_request(
+        source_text="batch source",
+        is_url_mode=False,
+        title="",
+        voice=voice,
+        custom_style_path=custom_style_path,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
+        output_dir=output_dir,
+        use_user_config=use_user_config,
+    )
+    _, log_path = configure_logger(verbose=verbose)
+    result = await run_batch(sources, template=template, verbose=verbose)
+    return {
+        "completed_count": result.completed_count,
+        "failed_count": result.failed_count,
+        "cancelled_count": result.cancelled_count,
+        "items": [
+            {
+                "source": item.display_name,
+                "status": item.status,
+                "output_path": item.generation.output_path if item.generation else None,
+                "error": item.error_message or None,
+                "diagnostic_report_path": item.diagnostic_report_path or None,
+            }
+            for item in result.items
+        ],
+        "diagnostic_report_path": result.diagnostic_report_path or None,
+        "log_path": str(log_path.resolve()),
+    }
+
+
 async def _generate_with_dependencies(request, *, logger: logging.Logger) -> GenerationResult:
-    return await run_generation(request, logger=logger, cached=True)
+    return await run_generation(request, logger=logger, durable=True)
 
 
 def _serialize_generation(
@@ -98,8 +154,17 @@ def _serialize_generation(
         "duration_seconds": generation.artifact.duration_seconds,
         "batch_count": generation.artifact.batch_count,
         "title": request.title or generation.content.best_title(),
-        "text_length": len(generation.content.text),
-        "warnings": generation.artifact.summary_notes(),
+        "text_length": (
+            generation.text_length
+            if generation.text_length is not None
+            else len(generation.content.text)
+        ),
+        "warnings": list(generation.warnings) or generation.artifact.summary_notes(),
+        "diagnostic_report_path": (
+            str(generation.diagnostic_report_path.resolve())
+            if generation.diagnostic_report_path
+            else None
+        ),
         "log_path": str(log_path.resolve()),
     }
 
@@ -127,7 +192,7 @@ def create_mcp_server() -> Any:
         output_dir: str | None = None,
         use_user_config: bool = True,
     ) -> dict[str, object]:
-        """Convert inline text, readable URL content, or a .txt/.md/.pdf file to a local WAV file."""
+        """Convert text, readable URL content, or a .txt/.md/.text/.pdf file to local WAV."""
         return await generate_wav(
             source,
             is_url_mode=is_url_mode,
@@ -149,6 +214,37 @@ def create_mcp_server() -> Any:
     def speekify_generation_defaults() -> dict[str, object]:
         """Return supported voices, languages, and default generation settings."""
         return generation_defaults()
+
+    @mcp.tool(name="speekify_generate_batch")
+    async def speekify_generate_batch(
+        sources: list[str],
+        voice: str = DEFAULT_VOICE,
+        custom_style_path: str | None = None,
+        language_code: str = AUTO_TTS_LANGUAGE,
+        speed: float = DEFAULT_SPEED,
+        steps: int = DEFAULT_STEPS,
+        max_chunk_length: int | None = None,
+        silence_duration: float = DEFAULT_SILENCE_DURATION,
+        english_islands: bool = True,
+        english_lexicon_path: str | None = None,
+        output_dir: str | None = None,
+        use_user_config: bool = True,
+    ) -> dict[str, object]:
+        """Generate one local WAV per file, URL, text item, or directory document."""
+        return await generate_batch_wav(
+            sources,
+            voice=voice,
+            custom_style_path=custom_style_path,
+            language_code=language_code,
+            speed=speed,
+            steps=steps,
+            max_chunk_length=max_chunk_length,
+            silence_duration=silence_duration,
+            english_islands=english_islands,
+            english_lexicon_path=english_lexicon_path,
+            output_dir=output_dir,
+            use_user_config=use_user_config,
+        )
 
     @mcp.prompt(name="news_recap_to_audio")
     def news_recap_to_audio() -> str:

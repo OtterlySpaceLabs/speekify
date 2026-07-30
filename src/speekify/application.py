@@ -5,6 +5,7 @@ import contextlib
 import logging
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from speekify.config import (
     AUTO_TTS_LANGUAGE,
@@ -30,6 +31,9 @@ from speekify.workflow import (
 
 _GENERATION_LOCK: asyncio.Lock | None = None
 
+if TYPE_CHECKING:
+    from speekify.temporal_models import BatchWorkflowResultV1
+
 
 def build_generation_request(
     *,
@@ -46,6 +50,7 @@ def build_generation_request(
     english_islands: bool,
     english_lexicon_path: str | Path | None,
     output_dir: str | Path | None,
+    output_path: str | Path | None = None,
     use_user_config: bool = True,
 ) -> GenerationRequest:
     user_config = load_user_config() if use_user_config else UserConfig()
@@ -82,6 +87,7 @@ def build_generation_request(
         title=title.strip(),
         is_url_mode=is_url_mode,
         output_dir=_expand_path(output_dir) or Path.cwd(),
+        output_path=_expand_path(output_path),
     )
 
 
@@ -91,7 +97,17 @@ async def run_generation(
     logger: logging.Logger,
     status_callback: Callable[[str], None] | None = None,
     cached: bool = False,
+    durable: bool = False,
+    verbose: bool = False,
 ) -> GenerationResult:
+    if durable:
+        from speekify.temporal_client import run_temporal_generation
+
+        return await run_temporal_generation(
+            request,
+            status_callback=status_callback,
+            verbose=verbose,
+        )
     dependencies = build_dependencies(cached=cached)
     # ponytail: cached mode shares one set of models across MCP calls; serialize them.
     lock = _generation_lock() if cached else contextlib.nullcontext()
@@ -103,6 +119,25 @@ async def run_generation(
             logger=logger,
             status_callback=status_callback,
         )
+
+
+async def run_batch(
+    sources: list[str],
+    *,
+    template: GenerationRequest,
+    status_callback: Callable[[str], None] | None = None,
+    verbose: bool = False,
+) -> BatchWorkflowResultV1:
+    from speekify.batch import expand_batch_sources
+    from speekify.temporal_client import generation_options, run_temporal_batch
+
+    expanded = expand_batch_sources(sources)
+    return await run_temporal_batch(
+        expanded,
+        options=generation_options(template),
+        status_callback=status_callback,
+        verbose=verbose,
+    )
 
 
 async def run_inspection(

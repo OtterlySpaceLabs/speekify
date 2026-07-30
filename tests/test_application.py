@@ -158,3 +158,53 @@ def test_run_inspection_uses_built_dependencies(monkeypatch, tmp_path) -> None:
     assert captured["request"] is request
     assert captured["translator"] is translator
     assert captured["logger"] is logger
+
+
+def test_run_generation_can_use_local_temporal_runtime(monkeypatch, tmp_path) -> None:
+    request = build_generation_request(
+        source_text="Bonjour",
+        is_url_mode=False,
+        title="",
+        voice="M5",
+        custom_style_path=None,
+        language_code="fr",
+        speed=0.98,
+        steps=10,
+        max_chunk_length=None,
+        silence_duration=0.25,
+        english_islands=True,
+        english_lexicon_path=None,
+        output_dir=str(tmp_path),
+        use_user_config=False,
+    )
+    expected = GenerationResult(
+        output_path=tmp_path / "durable.wav",
+        artifact=SynthesisArtifact(
+            wav=None,
+            duration_seconds=1.0,
+            batch_count=1,
+            prepared_text=PreparedText("Bonjour", "Bonjour", False, (), 0),
+        ),
+        content=ExtractedContent("Bonjour"),
+    )
+
+    async def fake_temporal_generation(actual_request, **kwargs):
+        assert actual_request is request
+        assert kwargs["verbose"] is True
+        return expected
+
+    monkeypatch.setattr(
+        "speekify.temporal_client.run_temporal_generation",
+        fake_temporal_generation,
+    )
+
+    result = asyncio.run(
+        run_generation(
+            request,
+            logger=logging.getLogger("test-temporal-dispatch"),
+            durable=True,
+            verbose=True,
+        )
+    )
+
+    assert result is expected

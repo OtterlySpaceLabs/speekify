@@ -11,7 +11,7 @@ const en = {
 	meta: {
 		title: "Speekify — Turn text into local audio from your terminal",
 		description:
-			"Speekify is an open-source CLI that turns articles, PDFs, YouTube transcripts, and piped text into a local audio file, synthesized on your own machine. Multilingual, with an MCP server for AI workflows.",
+			"Speekify is an open-source CLI that turns articles, PDFs, YouTube transcripts, piped text, and source batches into local audio. Synthesis and durable execution run on your machine.",
 	},
 	nav: {
 		how: "How it works",
@@ -27,7 +27,7 @@ const en = {
 		badgeText: "Runs locally with Supertonic v3 — no audio leaves your machine",
 		title: "Turn anything you'd read into something you can hear.",
 		description:
-			"Speekify is an open-source CLI that converts articles, PDFs, YouTube transcripts, and piped text into a local audio file — synthesized on your own machine. Nothing you read leaves your computer.",
+			"Speekify converts articles, PDFs, YouTube transcripts, and piped text into local audio. Synthesis stays on your machine; URL content is fetched only from the source you request.",
 		getStarted: "Get started",
 		viewGithub: "View on GitHub",
 		caption: "Output is a .wav file in your current folder.",
@@ -40,7 +40,7 @@ const en = {
 			{ title: "Listen anywhere", body: "Take your backlog on a walk, a commute, or the dishes." },
 			{
 				title: "Local & private",
-				body: "Audio is synthesized on your machine. Nothing you read leaves your computer.",
+				body: "Audio and durable workflow state stay on your machine. URL extraction still contacts the source you request.",
 			},
 			{ title: "One command", body: "Point Speekify at a source and get a file back." },
 		],
@@ -51,7 +51,7 @@ const en = {
 		cards: [
 			{
 				title: "Many input sources",
-				body: "Inline text, stdin, local .txt/.md/.pdf files, readable URLs, and YouTube transcripts. Auto-detected.",
+				body: "Inline text, stdin, local .txt/.md/.text/.pdf files, readable URLs, YouTube transcripts, and recursive batches.",
 			},
 			{
 				title: "Local synthesis",
@@ -66,10 +66,13 @@ const en = {
 				body: "10 built-in voices (M1–M5, F1–F5), custom Voice Builder JSON styles, plus speed and synthesis-step tuning.",
 			},
 			{
-				title: "MCP server",
-				body: "Expose Speekify as a tool so AI assistants can generate audio inside your automations.",
+				title: "Reliable batches",
+				body: "A loopback-only Temporal service retries local work, preserves progress on disk, and generates one WAV per batch item.",
 			},
-			{ title: "Open source", body: "MIT licensed. Read the code, file an issue, send a patch." },
+			{
+				title: "MCP server",
+				body: "Expose single and batch generation as tools for AI assistants.",
+			},
 		],
 	},
 	how: {
@@ -77,7 +80,7 @@ const en = {
 		steps: [
 			{
 				title: "Install Speekify.",
-				body: "Homebrew on macOS, from source with uv, or from PyPI.",
+				body: "Homebrew on Apple Silicon macOS, or pip/pipx/uv on supported macOS and Linux systems.",
 			},
 			{
 				title: "Run setup once.",
@@ -107,6 +110,7 @@ const en = {
 			"A YouTube video (quote URLs with ? or &)",
 			"Pipe text from stdin",
 			"Pick a voice and output folder",
+			"Generate one WAV per file, URL, text item, or directory document",
 		],
 		fullRef: "Full command reference →",
 	},
@@ -114,7 +118,7 @@ const en = {
 		title: "Let your AI assistant make the audio.",
 		subtitle:
 			"Speekify ships a local Model Context Protocol server, so assistants can call it as a tool inside their automations.",
-		body: "Start the server with one command and Speekify becomes available to MCP-capable clients — Claude Code, GitHub Copilot, Codex, and OpenAI's remote MCP. The server exposes speekify_generate_wav (text, URL, or file → WAV with structured details), speekify_generation_defaults (supported voices, languages, and ranges), and a news_recap_to_audio prompt template. The audio is still generated locally on your machine.",
+		body: "Start the server with one command and Speekify becomes available to MCP-capable clients — Claude Code, GitHub Copilot, Codex, and OpenAI's remote MCP. It exposes speekify_generate_wav, speekify_generate_batch, generation defaults, and a news recap prompt. Audio synthesis and Temporal stay on the Speekify host; remote MCP arguments still travel through the selected client transport.",
 		startLabel: "Start the MCP server",
 		addLabel: "Add to Claude Code",
 		perClient: "Per-client setup →",
@@ -136,7 +140,7 @@ const en = {
 			},
 			{
 				title: "News & tech veille",
-				body: "Batch your reading into audio you can get through while doing something else.",
+				body: "Use speekify batch with files, URLs, or a directory to create one WAV per source.",
 			},
 			{
 				title: "Automated reading via an AI agent",
@@ -146,11 +150,11 @@ const en = {
 	},
 	install: {
 		title: "Install Speekify.",
-		subtitle: "Homebrew, from source, or from PyPI — all work today.",
-		brewLabel: "macOS — Homebrew (no Python or uv required)",
+		subtitle: "Homebrew on Apple Silicon macOS, pip/pipx/uv on macOS and Linux, or source with uv.",
+		brewLabel: "Apple Silicon macOS — Homebrew (no Python or uv required)",
 		sourceLabel: "From source (uv)",
 		pypiLabel: "pip / pipx / uv — from PyPI",
-		note: "Run speekify setup once after installing. It downloads and warms the local Supertonic model (and, by default, the English→French translation model). Skip it and the models download automatically on first use.",
+		note: "Run speekify setup once to warm the AI models. Homebrew installs Temporal as a dependency; pip/pipx/uv securely provision the pinned Temporal CLI on first generation (macOS/Linux arm64 or amd64). The local service stops after five idle minutes and reuses its persisted state next time.",
 	},
 	openSource: {
 		badge: "MIT Licensed",
@@ -174,7 +178,7 @@ const fr: Content = {
 	meta: {
 		title: "Speekify — Transformez du texte en audio local depuis votre terminal",
 		description:
-			"Speekify est un CLI open source qui transforme articles, PDF, transcriptions YouTube et texte redirigé en fichier audio local, synthétisé sur votre propre machine. Multilingue, avec un serveur MCP pour vos workflows IA.",
+			"Speekify est un CLI open source qui transforme articles, PDF, transcriptions YouTube, texte redirigé et lots de sources en audio local. La synthèse et l'exécution durable tournent sur votre machine.",
 	},
 	nav: {
 		how: "Fonctionnement",
@@ -190,7 +194,7 @@ const fr: Content = {
 		badgeText: "Fonctionne en local avec Supertonic v3 — aucun audio ne quitte votre machine",
 		title: "Transformez tout ce que vous liriez en quelque chose à écouter.",
 		description:
-			"Speekify est un CLI open source qui convertit articles, PDF, transcriptions YouTube et texte redirigé en fichier audio local — synthétisé sur votre propre machine. Rien de ce que vous lisez ne quitte votre ordinateur.",
+			"Speekify convertit articles, PDF, transcriptions YouTube et texte redirigé en audio local. La synthèse reste sur votre machine ; une URL n'est récupérée que depuis la source que vous demandez.",
 		getStarted: "Commencer",
 		viewGithub: "Voir sur GitHub",
 		caption: "Le résultat est un fichier .wav dans votre dossier courant.",
@@ -203,7 +207,7 @@ const fr: Content = {
 			{ title: "Écoutez partout", body: "Emportez votre arriéré en balade, dans les transports ou à la vaisselle." },
 			{
 				title: "Local et privé",
-				body: "L'audio est synthétisé sur votre machine. Rien de ce que vous lisez ne quitte votre ordinateur.",
+				body: "L'audio et l'état durable restent sur votre machine. L'extraction d'une URL contacte tout de même la source demandée.",
 			},
 			{ title: "Une seule commande", body: "Pointez Speekify vers une source et récupérez un fichier." },
 		],
@@ -214,7 +218,7 @@ const fr: Content = {
 		cards: [
 			{
 				title: "De multiples sources",
-				body: "Texte en ligne, stdin, fichiers locaux .txt/.md/.pdf, URL lisibles et transcriptions YouTube. Détection automatique.",
+				body: "Texte en ligne, stdin, fichiers .txt/.md/.text/.pdf, URL lisibles, transcriptions YouTube et lots récursifs.",
 			},
 			{
 				title: "Synthèse locale",
@@ -229,10 +233,13 @@ const fr: Content = {
 				body: "10 voix intégrées (M1–M5, F1–F5), styles JSON personnalisés via Voice Builder, plus réglage de la vitesse et du nombre d'étapes de synthèse.",
 			},
 			{
-				title: "Serveur MCP",
-				body: "Exposez Speekify comme outil pour que les assistants IA génèrent de l'audio dans vos automatisations.",
+				title: "Lots fiables",
+				body: "Un service Temporal lié à l'interface locale relance le travail, conserve la progression sur disque et crée un WAV par élément.",
 			},
-			{ title: "Open source", body: "Sous licence MIT. Lisez le code, ouvrez une issue, envoyez un correctif." },
+			{
+				title: "Serveur MCP",
+				body: "Exposez la génération unitaire et par lots comme outils pour les assistants IA.",
+			},
 		],
 	},
 	how: {
@@ -240,7 +247,7 @@ const fr: Content = {
 		steps: [
 			{
 				title: "Installez Speekify.",
-				body: "Homebrew sur macOS, depuis les sources avec uv, ou depuis PyPI.",
+				body: "Homebrew sur macOS Apple Silicon, ou pip/pipx/uv sur les systèmes macOS et Linux pris en charge.",
 			},
 			{
 				title: "Lancez la configuration une fois.",
@@ -270,6 +277,7 @@ const fr: Content = {
 			"Une vidéo YouTube (mettez les URL avec ? ou & entre guillemets)",
 			"Rediriger du texte depuis stdin",
 			"Choisir une voix et un dossier de sortie",
+			"Créer un WAV par fichier, URL, texte ou document d'un dossier",
 		],
 		fullRef: "Référence complète des commandes →",
 	},
@@ -277,7 +285,7 @@ const fr: Content = {
 		title: "Laissez votre assistant IA générer l'audio.",
 		subtitle:
 			"Speekify embarque un serveur Model Context Protocol local, pour que les assistants l'appellent comme un outil dans leurs automatisations.",
-		body: "Démarrez le serveur d'une seule commande et Speekify devient disponible pour les clients compatibles MCP — Claude Code, GitHub Copilot, Codex et le MCP distant d'OpenAI. Le serveur expose speekify_generate_wav (texte, URL ou fichier → WAV avec détails structurés), speekify_generation_defaults (voix, langues et plages prises en charge), et un modèle de prompt news_recap_to_audio. L'audio reste généré localement sur votre machine.",
+		body: "Démarrez le serveur d'une commande pour exposer speekify_generate_wav, speekify_generate_batch, les valeurs par défaut et un prompt de synthèse d'actualités. L'audio et Temporal restent sur l'hôte Speekify ; avec un MCP distant, les arguments passent tout de même par le transport du client.",
 		startLabel: "Démarrer le serveur MCP",
 		addLabel: "Ajouter à Claude Code",
 		perClient: "Configuration par client →",
@@ -299,7 +307,7 @@ const fr: Content = {
 			},
 			{
 				title: "Actualités et veille tech",
-				body: "Regroupez vos lectures en audio à parcourir pendant que vous faites autre chose.",
+				body: "Utilisez speekify batch avec des fichiers, des URL ou un dossier pour créer un WAV par source.",
 			},
 			{
 				title: "Lecture automatisée via un agent IA",
@@ -309,11 +317,11 @@ const fr: Content = {
 	},
 	install: {
 		title: "Installez Speekify.",
-		subtitle: "Homebrew, depuis les sources ou depuis PyPI — tout fonctionne dès aujourd'hui.",
-		brewLabel: "macOS — Homebrew (ni Python ni uv requis)",
+		subtitle: "Homebrew sur macOS Apple Silicon, pip/pipx/uv sur macOS et Linux, ou les sources avec uv.",
+		brewLabel: "macOS Apple Silicon — Homebrew (ni Python ni uv requis)",
 		sourceLabel: "Depuis les sources (uv)",
 		pypiLabel: "pip / pipx / uv — depuis PyPI",
-		note: "Lancez speekify setup une fois après l'installation. Il télécharge et préchauffe le modèle Supertonic local (et, par défaut, le modèle de traduction anglais→français). Sautez cette étape et les modèles se téléchargeront automatiquement à la première utilisation.",
+		note: "Lancez speekify setup une fois pour préchauffer les modèles IA. Homebrew installe Temporal comme dépendance ; pip/pipx/uv provisionnent le CLI Temporal épinglé à la première génération (macOS/Linux arm64 ou amd64). Le service local s'arrête après cinq minutes d'inactivité et réutilise ensuite son état persistant.",
 	},
 	openSource: {
 		badge: "Sous licence MIT",

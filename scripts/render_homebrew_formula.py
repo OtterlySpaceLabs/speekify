@@ -6,7 +6,7 @@ from pathlib import Path
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Render a Homebrew formula for a Speekify standalone release archive."
+        description="Render a Homebrew formula for the Speekify Homebrew payload."
     )
     parser.add_argument("--version", required=True, help="Release version, for example 0.1.0")
     parser.add_argument("--url", required=True, help="Release tarball URL")
@@ -34,8 +34,10 @@ def render_formula(*, version: str, url: str, sha256: str, homepage: str) -> str
         f'  sha256 "{sha256}"\n'
         f'  version "{version}"\n'
         "\n"
+        '  depends_on "temporal"\n'
+        "\n"
         "  def install\n"
-        "    # onedir build: the launcher needs its sibling _internal/ folder,\n"
+        "    # Homebrew payload: the launcher needs its sibling _internal/ folder,\n"
         "    # so install the whole dir into libexec and symlink the launcher.\n"
         '    libexec.install "speekify"\n'
         '    bin.install_symlink libexec/"speekify/speekify"\n'

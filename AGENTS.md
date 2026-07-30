@@ -15,4 +15,3 @@ The installed command is `speekify`, wired by `pyproject.toml` to `speekify.__ma
 - [Dependencies and integrations](docs/agents/dependencies-integrations.md)
 - [MCP client setup](docs/mcp-clients.md)
 - [Release runbook](docs/agents/release-runbook.md)
-- [Deletion candidates](docs/agents/deletion-candidates.md)

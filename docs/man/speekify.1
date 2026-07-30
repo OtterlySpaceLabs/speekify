@@ -1,4 +1,4 @@
-.TH SPEEKIFY 1 "May 2026" "Speekify" "User Commands"
+.TH SPEEKIFY 1 "July 30, 2026" "Speekify" "User Commands"
 .SH NAME
 speekify \- convert inline text, stdin, a local text/PDF file, or readable URL content into a local WAV file
 .SH SYNOPSIS
@@ -9,6 +9,13 @@ speekify \- convert inline text, stdin, a local text/PDF file, or readable URL c
 [
 .I SOURCE ...
 ]
+.PP
+.B speekify
+.B batch
+[
+.I OPTIONS
+]
+.I SOURCE ...
 .PP
 .B speekify
 .B setup
@@ -32,6 +39,16 @@ speekify \- convert inline text, stdin, a local text/PDF file, or readable URL c
 .SH DESCRIPTION
 Speekify is a Python CLI that turns inline text, piped stdin, a local text/PDF file, or the readable body of a URL into a local WAV file generated with Supertonic v3.
 .PP
+Generation is synchronously orchestrated by a local Temporal service and worker started automatically by Speekify. The terminal shows progress and then the final WAV path; no Temporal administration is required.
+.PP
+The service is headless, bound only to 127.0.0.1:7233, and uses a local SQLite database. It remains active while a generation, batch, or Temporal workflow is running. It stops after five minutes with no client and no active workflow; a later generation restarts it with the same on-disk state.
+.PP
+Homebrew manages Temporal as a formula dependency. With pip, pipx, or uv,
+Speekify downloads a pinned official Temporal CLI on first generation, verifies
+its published SHA-256, stores it in the user data directory, and reuses it
+offline. Automatic provisioning supports macOS and Linux on arm64 and amd64;
+Windows is not supported. No separate installation is required.
+.PP
 The default workflow accepts plain text, piped text, a single URL, or a path to a local
 .B .txt , .md , .text ,
 or
@@ -51,11 +68,15 @@ the shell can reject the command before
 starts.
 .PP
 Use
+.B speekify batch
+to generate one WAV per file, URL, text item, or supported document found recursively in a directory. Directories are stable-sorted and deduplicated; symlinks are not followed. A batch accepts at most 1,000 unique items and files up to 50 MiB.
+.PP
+Use
 .B speekify setup
 to pre-download and warm the local AI models.
 Use
 .B speekify --doctor
-to verify the runtime dependencies, confirm that the AI models load correctly, and get a remediation hint when setup is required.
+to verify the runtime dependencies, confirm that the AI models load correctly, and get a remediation hint when setup is required. Doctor reports Temporal availability or provisionability but does not download Temporal.
 .PP
 Use
 .B speekify inspect
@@ -149,12 +170,21 @@ Show setup help and exit.
 .TP
 .B speekify inspect
 Accepts the same source, URL, language, voice, chunking, and output options as the main generation command, but does not synthesize or write a WAV file.
+.SH BATCH BEHAVIOR
+The
+.B speekify batch
+command accepts the common title, voice, language, speed, steps, chunking, English-island, output-directory, and verbose options. It does not accept
+.BR --url " or " --dry-run .
+.PP
+Up to four item workflows may be in flight. The preparation worker runs at most two activities concurrently, while one local audio worker serializes synthesis. Successful items are kept when another item fails; the command exits non-zero if any item failed.
 .SH MCP SERVER
 The
 .B speekify mcp
 entry point runs an MCP server over stdio by default. It exposes the
 .B speekify_generate_wav
-tool for converting inline text, readable URL content, or a local .txt/.md/.pdf file into a WAV file,
+tool for converting inline text, readable URL content, or a local .txt/.md/.text/.pdf file into a WAV file,
+.B speekify_generate_batch
+for multiple files, URLs, text items, or directories,
 .B speekify_generation_defaults
 for supported voices and language defaults, and a
 .B news_recap_to_audio
@@ -220,6 +250,9 @@ Inspect inline text generation without creating a WAV file.
 .B speekify setup
 Download and warm the local AI models.
 .TP
+.B speekify batch article.pdf https://example.com ./notes
+Generate one WAV per source and recursively expand the directory.
+.TP
 .B speekify mcp
 Run the MCP server for local AI clients over stdio.
 .TP
@@ -227,8 +260,19 @@ Run the MCP server for local AI clients over stdio.
 Run the MCP server with streamable HTTP transport for local experiments.
 .SH FILES
 .TP
-.I logs/speekify.log
-Runtime log file maintained automatically by the CLI.
+.I ~/Library/Application Support/Speekify/runtime/speekify.log
+Runtime log file on macOS.
+.TP
+.I ${XDG_DATA_HOME:-~/.local/share}/speekify/runtime/speekify.log
+Runtime log file on Linux and other supported POSIX installations.
+.TP
+.I <data directory>/temporal/temporal.db
+Persistent local Temporal SQLite database.
+.TP
+.I <data directory>/jobs, batches, reports
+Private generation receipts/prepared sources, batch manifests/results, and redacted reports. Set
+.B SPEEKIFY_DATA_DIR
+to override the platform data directory.
 .TP
 .I ~/.config/speekify/config.toml
 Optional TOML file for generation defaults. Set
@@ -237,6 +281,10 @@ to use another config path. Explicit CLI options override config values.
 .SH EXIT STATUS
 The command exits with status 0 on success and non-zero on failure. The
 .B --doctor
-command exits non-zero when dependencies are missing or when one of the models cannot be loaded.
+command exits non-zero when dependencies are missing or when one of the models cannot be loaded. A batch exits non-zero if at least one item failed.
+.SH NETWORK AND PRIVACY
+Inline text, local file contents, Temporal state, and audio synthesis are not sent to a hosted TTS or Temporal service. Network access is used to fetch requested URLs or YouTube transcripts, download AI models, and provision the pinned Temporal CLI for pip/pipx/uv. Temporal telemetry, newsfeed, and inherited OTEL exporters are disabled.
+.PP
+Remote MCP transports carry tool arguments between the remote client and the Speekify endpoint or tunnel; use stdio when the complete client-to-Speekify path must remain local.
 .SH SEE ALSO
 .BR man (1)

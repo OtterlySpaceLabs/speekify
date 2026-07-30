@@ -15,8 +15,17 @@ speekify mcp --transport streamable-http  # HTTP endpoint at http://127.0.0.1:80
 > `.vscode/mcp.json`, and `.codex/config.toml.example` use that `uv run` form.
 
 **Tools exposed:** `speekify_generate_wav` (text/URL/file → WAV),
+`speekify_generate_batch` (multiple sources/directories → WAV files),
 `speekify_generation_defaults` (supported voices, languages, ranges), and the
 `news_recap_to_audio` prompt template.
+
+Both generation tools use the same loopback-only durable runtime as the CLI.
+The batch tool applies the CLI limits (1,000 unique items, 50 MiB per file,
+recursive directories without following symlinks) and returns per-item status
+plus diagnostic-report paths. Temporal administration and IDs are not exposed
+as MCP tools. The local service stops after five minutes without a client or
+running workflow and restarts from its persisted SQLite state on the next
+generation.
 
 ## Connect to Claude Code
 
@@ -117,7 +126,7 @@ response = client.responses.create(
         "server_label": "speekify",
         "server_url": "https://speekify.example.com/mcp",
         "require_approval": "never",
-        "allowed_tools": ["speekify_generation_defaults", "speekify_generate_wav"],
+        "allowed_tools": ["speekify_generation_defaults", "speekify_generate_wav", "speekify_generate_batch"],
     }],
 )
 print(response.output_text)
@@ -143,7 +152,8 @@ For a stdio target instead of HTTP, swap `--mcp-server-url …` for
 
 Then in ChatGPT: open connector settings → create a custom connector → choose
 **Tunnel** → select the Speekify tunnel (or paste the `tunnel_id`) → let ChatGPT
-discover `speekify_generate_wav` and `speekify_generation_defaults`. Test with a
+discover `speekify_generate_wav`, `speekify_generate_batch`, and
+`speekify_generation_defaults`. Test with a
 low-risk prompt:
 
 ```text
@@ -152,6 +162,11 @@ Use the Speekify MCP tools to inspect the available defaults, then generate a sh
 
 If discovery fails: confirm `tunnel-client run` is active, `tunnel-client doctor
 … --explain` is healthy, and the ChatGPT workspace is allowed to use the tunnel.
+
+With a remote MCP client, tool arguments travel from that client to the
+Speekify endpoint or tunnel. The Temporal service and audio synthesis still run
+locally on the Speekify host, but this transport is not equivalent to a
+fully-local stdio client.
 
 ## Verify any client
 

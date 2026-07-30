@@ -8,8 +8,8 @@ Depuis la migration vers la CI GitHub, la release est **construite et publiee pa
 GitHub Actions**, pas en local. Le workflow `.github/workflows/release.yml` se
 declenche a la publication d'une Release GitHub et:
 
-- construit le binaire macOS standalone (`--onedir`) sur un runner `macos-latest`
-- attache `speekify-macos-arm64.tar.gz` a la Release
+- construit le payload technique Homebrew (`--onedir`) sur `macos-latest`
+- attache `speekify-homebrew-macos-arm64.tar.gz` a la Release
 - regenere `Formula/speekify.rb` et le committe sur `main`
 
 Le depot est desormais **public et unique** (`OtterlySpaceLabs/speekify`): le tap
@@ -80,7 +80,7 @@ GH_PAGER=cat gh release create "$TAG" \
 La publication de la Release declenche :
 
 - `publish.yml` → build wheel/sdist + publication PyPI
-- `release.yml` → build macOS + upload de l'archive + commit de `Formula/speekify.rb` sur `main`
+- `release.yml` → payload Homebrew + commit de `Formula/speekify.rb` sur `main`
 
 Aucune action macOS locale n'est requise.
 
@@ -94,7 +94,7 @@ GH_PAGER=cat gh run watch <run-id>
 Resultat attendu :
 
 - `publish.yml` vert (PyPI)
-- `release.yml` vert : archive attachee a la Release, `Formula/speekify.rb` mis a
+- `release.yml` vert : payload Homebrew attache, `Formula/speekify.rb` mis a
   jour sur `main` (nouveau commit `chore(release): update Homebrew formula ...`)
 
 ## 6. Verifications post-publication
@@ -102,11 +102,11 @@ Resultat attendu :
 ```bash
 GH_PAGER=cat gh release view "$TAG"
 
-# Telechargement public direct
+# Validation technique du payload reserve a Homebrew
 TMPDIR="$(mktemp -d /tmp/speekify-release-check.XXXXXX)"
 cd "$TMPDIR"
 curl -L -o speekify.tar.gz \
-  "https://github.com/OtterlySpaceLabs/speekify/releases/download/${TAG}/speekify-macos-arm64.tar.gz"
+  "https://github.com/OtterlySpaceLabs/speekify/releases/download/${TAG}/speekify-homebrew-macos-arm64.tar.gz"
 tar -xzf speekify.tar.gz
 ./speekify/speekify --help >/dev/null
 ./speekify/speekify setup --help >/dev/null
@@ -140,5 +140,6 @@ Les releases PyPI sont immuables : un upload PyPI casse exige une nouvelle versi
   `main` a une protection bloquant le bot Actions, l'etape de push echoue —
   autoriser le bot ou assouplir la regle.
 - Build `arm64` uniquement (runner `macos-latest` = Apple Silicon).
+- Le provisionneur PyPI couvre macOS et Linux en `arm64`/`amd64`; Windows reste
+  hors perimetre. La limite `arm64` ci-dessus concerne uniquement Homebrew.
 - Le binaire est non signe : premier lancement = scan Gatekeeper unique.
-```

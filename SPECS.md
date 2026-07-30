@@ -2,7 +2,10 @@
 
 ## Goal
 
-Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/`.md`/`.pdf` file, or readable URL content into a local WAV file generated with Supertonic v3.
+Speekify is a Python 3.11+ CLI that converts inline text, piped stdin, a local
+`.txt`/`.md`/`.text`/`.pdf` file, or readable URL content into a local WAV file
+generated with Supertonic v3. User-facing generation is synchronous while a
+strictly local Temporal runtime provides durable orchestration.
 
 ## Architecture
 
@@ -18,6 +21,18 @@ Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/
 - `src/speekify/multilingual.py`: French-English island segmentation and optional English lexicon loading.
 - `src/speekify/translation.py`: English-to-French translation support when French synthesis is requested.
 - `src/speekify/mcp_server.py`: local MCP server exposing the generation tools.
+- `src/speekify/batch.py`: recursive directory expansion, source validation,
+  deterministic ordering, deduplication, and batch limits.
+- `src/speekify/temporal_client.py`: blocking client bridge for durable
+  generation/batches, progress polling, and direct-generation reattachment.
+- `src/speekify/temporal_workflows.py`: versioned generation and batch workflows,
+  retries, timeouts, progress queries, and diagnostic-report decisions.
+- `src/speekify/temporal_activities.py`: idempotent preparation, synthesis,
+  atomic output persistence, and diagnostic activities.
+- `src/speekify/temporal_runtime.py`: loopback Temporal server/worker daemon,
+  five-minute idle shutdown, activity leases, and verified CLI provisioning.
+- `src/speekify/job_store.py`: private local data layout, atomic JSON/text writes,
+  receipts, hashes, URL/secret redaction, and reports.
 
 ## Runtime Decisions
 
@@ -42,6 +57,27 @@ Speekify is a Python CLI that converts inline text, piped stdin, a local `.txt`/
 - `--dry-run` and `speekify inspect` preview extraction, translation, and planned output paths without synthesis.
 - MCP generation exposes CLI-equivalent generation controls including English-island options and optional user-config defaults.
 - Running without a source and without piped stdin is an invalid CLI invocation.
+- CLI and MCP generation use the local Temporal workflow path; `inspect` and
+  `--dry-run` do not synthesize and do not start Temporal.
+- Temporal binds to `127.0.0.1:7233`, runs headless with telemetry/newsfeed and
+  inherited `OTEL_*` exporters disabled, and persists SQLite state locally.
+- The daemon holds the service open for every client generation/batch and for
+  every running Temporal workflow. It stops only after five minutes with no
+  lease and no active workflow; the next generation restarts it on the same
+  database.
+- Homebrew owns the `temporal` dependency. pip/pipx/uv provision the pinned
+  official Temporal CLI 1.8.1 on first generation, verify its SHA-256, publish
+  it atomically, then reuse it offline. This path supports macOS/Linux on
+  `arm64`/`amd64`; Windows is not supported.
+- Batch input is limited to 1,000 unique items and 50 MiB per file. Directories
+  are recursive and stable-sorted; unsupported entries and symlinks are skipped,
+  while explicitly supplied symlinks or unsupported files are rejected.
+- There is no public Temporal administration, job-listing, job-status, or
+  manual-resume command. Repeating an unacknowledged direct request reattaches
+  by request fingerprint; durable batch workflows resume internally when the
+  runtime restarts, but the CLI has no batch lookup command. Client cancellation
+  (including `Ctrl+C`) is propagated to the workflow; process loss without a
+  cancellation signal is the reattachment case.
 
 ## Commands
 
@@ -54,8 +90,11 @@ speekify --title my-article --output-dir ~/Desktop "Hello world"
 speekify --custom-style-path ~/voices/my-voice.json "Hello world"
 speekify --dry-run https://example.com/article
 speekify inspect "Hello world"
+speekify batch article.pdf https://example.com ./notes
 speekify setup
 speekify setup --skip-translation
+speekify --doctor
+speekify mcp
 ```
 
 ## Validation

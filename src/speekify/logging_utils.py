@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from speekify.config import LOG_DIR, LOG_FILE_NAME
+from speekify.config import LOG_FILE_NAME
 
 LOGGER_NAME = "speekify"
 DEFAULT_LOG_RETENTION_DAYS = 14
@@ -17,7 +17,11 @@ QUIET_THIRD_PARTY_LOGGERS = (
 
 
 def get_log_path(log_path: Path | None = None) -> Path:
-    return log_path or LOG_DIR / LOG_FILE_NAME
+    if log_path is not None:
+        return log_path
+    from speekify.job_store import default_data_dir
+
+    return default_data_dir() / "runtime" / LOG_FILE_NAME
 
 
 def configure_logger(

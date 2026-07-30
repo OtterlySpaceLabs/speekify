@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import argparse
 import importlib.util
 import logging
 import os
@@ -17,6 +18,7 @@ import typer
 from speekify import application
 from speekify.cli_rendering import (
     format_status as _format_status,
+    render_batch_success as _render_batch_success,
     render_cli_error as _render_cli_error,
     render_doctor_report as _render_doctor_report,
     render_generation_success as _render_generation_success,
@@ -55,6 +57,7 @@ def _build_cli_epilog() -> str:
         '  speekify --dry-run "Hello world"',
         '  speekify inspect "Hello world"',
         "  printf 'Hello from stdin' | speekify",
+        "  speekify batch article.pdf https://example.com ./notes",
         "  speekify mcp",
         "",
         "Maintenance:",
@@ -71,11 +74,13 @@ def _build_cli_epilog() -> str:
 
 
 GENERATION_HELP = (
-    "Generate a local WAV file from text, stdin, a readable URL, or a .txt/.md/.pdf file.\n\n"
+    "Generate a local WAV file from text, stdin, a readable URL, "
+    "or a .txt/.md/.text/.pdf file.\n\n"
     + _build_cli_epilog()
 )
 SETUP_HELP = "Download and warm up the models used by Speekify."
 INSPECT_HELP = "Preview extraction, translation, and output naming without synthesis."
+BATCH_HELP = "Generate one local WAV per file, URL, text item, or directory document."
 
 
 def _parse_language_code(value: str) -> str:
@@ -96,8 +101,18 @@ SourceArgument = Annotated[
     list[str] | None,
     typer.Argument(
         metavar="SOURCE...",
-        help="Text, a single URL, or a path to a .txt/.md/.pdf file. Omit only when using stdin.",
+        help=(
+            "Text, a single URL, or a path to a .txt/.md/.text/.pdf file. "
+            "Omit only when using stdin."
+        ),
         show_default=False,
+    ),
+]
+BatchSourceArgument = Annotated[
+    list[str],
+    typer.Argument(
+        metavar="SOURCE...",
+        help="Files, URLs, text items, or directories expanded recursively.",
     ),
 ]
 UrlOption = Annotated[
@@ -217,6 +232,12 @@ inspect_app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+batch_app = typer.Typer(
+    add_completion=False,
+    context_settings=CONTEXT_SETTINGS,
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
 
 
 @generation_app.command(help=GENERATION_HELP)
@@ -307,6 +328,39 @@ def inspect_command(
     )
 
 
+@batch_app.command(help=BATCH_HELP)
+def batch_command(
+    source: BatchSourceArgument,
+    title: TitleOption = "",
+    voice: VoiceOption = DEFAULT_VOICE,
+    custom_style_path: CustomStylePathOption = None,
+    language_code: LanguageOption = AUTO_TTS_LANGUAGE,
+    speed: SpeedOption = DEFAULT_SPEED,
+    steps: StepsOption = DEFAULT_STEPS,
+    max_chunk_length: MaxChunkLengthOption = None,
+    silence_duration: SilenceDurationOption = DEFAULT_SILENCE_DURATION,
+    english_islands: EnglishIslandsOption = True,
+    english_lexicon_path: EnglishLexiconPathOption = None,
+    output_dir: OutputDirOption = None,
+    verbose: VerboseOption = False,
+) -> int:
+    return _run_batch(
+        sources=source,
+        title=title,
+        voice=voice,
+        custom_style_path=custom_style_path,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
+        output_dir=output_dir,
+        verbose=verbose,
+    )
+
+
 @setup_app.command(help=SETUP_HELP)
 def setup_command(
     skip_translation: SkipTranslationOption = False,
@@ -320,6 +374,8 @@ def setup_command(
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "_runtime":
+        return _run_internal_runtime(argv[1:])
     if len(argv) == 1 and argv[0] in {"--version", "-v"}:
         console.print(_get_version())
         return 0
@@ -333,6 +389,8 @@ def main(argv: list[str] | None = None) -> int:
         return _invoke_typer(setup_app, argv[1:], prog_name="speekify setup")
     if argv and argv[0] == "inspect":
         return _invoke_typer(inspect_app, argv[1:], prog_name="speekify inspect")
+    if argv and argv[0] == "batch":
+        return _invoke_typer(batch_app, argv[1:], prog_name="speekify batch")
     return _invoke_typer(generation_app, argv, prog_name="speekify")
 
 
@@ -406,8 +464,13 @@ def _run_generation(
                     request,
                     logger=logger,
                     status_callback=update_status,
+                    durable=True,
+                    verbose=verbose,
                 )
             )
+    except KeyboardInterrupt:
+        logger.info("CLI generation cancelled by user")
+        return 130
     except Exception as exc:
         logger.exception("CLI generation failed")
         _render_runtime_error(exc, log_path=log_path, verbose=verbose)
@@ -415,6 +478,65 @@ def _run_generation(
 
     _render_generation_success(generation, log_path=log_path if verbose else None)
     return 0
+
+
+def _run_batch(
+    *,
+    sources: list[str],
+    title: str,
+    voice: str,
+    custom_style_path: Path | None,
+    language_code: str,
+    speed: float,
+    steps: int,
+    max_chunk_length: int | None,
+    silence_duration: float,
+    english_islands: bool,
+    english_lexicon_path: Path | None,
+    output_dir: Path | None,
+    verbose: bool,
+) -> int:
+    options = _apply_user_config_options(
+        voice=voice,
+        custom_style_path=custom_style_path,
+        language_code=language_code,
+        speed=speed,
+        steps=steps,
+        max_chunk_length=max_chunk_length,
+        silence_duration=silence_duration,
+        english_islands=english_islands,
+        english_lexicon_path=english_lexicon_path,
+        output_dir=output_dir,
+    )
+    logger, log_path = configure_logger(verbose=verbose)
+    template = _build_cli_request(
+        source_text="batch source",
+        is_url_mode=False,
+        title=title,
+        options=options,
+    )
+    try:
+        with console.status(_format_status("starting"), spinner="dots") as status:
+
+            def update_status(message: str) -> None:
+                status.update(_format_status(message))
+
+            result = asyncio.run(
+                application.run_batch(
+                    list(sources),
+                    template=template,
+                    status_callback=update_status,
+                    verbose=verbose,
+                )
+            )
+    except KeyboardInterrupt:
+        return 130
+    except Exception as exc:
+        logger.exception("CLI batch generation failed")
+        _render_runtime_error(exc, log_path=log_path, verbose=verbose)
+        return 1
+    _render_batch_success(result, log_path=log_path if verbose else None)
+    return 1 if result.failed_count else 0
 
 
 def _run_inspection(
@@ -594,6 +716,24 @@ def _build_doctor_report() -> list[tuple[str, str, str]]:
 
 
 def _doctor_runtime_report(log_path: Path) -> list[tuple[str, str, str]]:
+    from speekify.temporal_runtime import (
+        TEMPORAL_CLI_VERSION,
+        find_temporal_binary,
+        temporal_download_spec,
+    )
+
+    temporal_binary = find_temporal_binary()
+    if temporal_binary is not None:
+        temporal_runtime = (str(temporal_binary), "ok")
+    else:
+        try:
+            temporal_download_spec()
+            temporal_runtime = (
+                f"Temporal CLI {TEMPORAL_CLI_VERSION} downloads automatically on first use",
+                "ok",
+            )
+        except RuntimeError as exc:
+            temporal_runtime = (str(exc), "error")
     return [
         ("Version", _get_version(), "ok"),
         ("Python", sys.version.split()[0], "ok"),
@@ -601,6 +741,11 @@ def _doctor_runtime_report(log_path: Path) -> list[tuple[str, str, str]]:
         ("Platform", platform.platform(), "ok"),
         ("Package", str(Path(__file__).resolve().parent), "ok"),
         _check_log_target(log_path),
+        (
+            "Local reliability engine",
+            temporal_runtime[0],
+            temporal_runtime[1],
+        ),
     ]
 
 
@@ -612,6 +757,7 @@ def _doctor_dependencies() -> tuple[tuple[str, str], ...]:
         ("sacremoses", "Dependency sacremoses"),
         ("sentencepiece", "Dependency sentencepiece"),
         ("supertonic", "Dependency supertonic"),
+        ("temporalio", "Dependency temporalio"),
         ("typer", "Dependency typer"),
         ("torch", "Dependency torch"),
         ("trafilatura", "Dependency trafilatura"),
@@ -710,6 +856,24 @@ def _read_source(source_parts: Sequence[str] | None) -> str | None:
         return piped_source or None
 
     return None
+
+
+def _run_internal_runtime(argv: list[str]) -> int:
+    from speekify.job_store import default_data_dir
+    from speekify.temporal_runtime import run_daemon, runtime_health, stop_runtime
+
+    parser = argparse.ArgumentParser(prog="speekify _runtime", add_help=True)
+    parser.add_argument("action", choices=("daemon", "health", "stop"))
+    parser.add_argument("--data-dir", type=Path, default=default_data_dir())
+    parser.add_argument("--foreground", action="store_true")
+    args = parser.parse_args(argv)
+    if args.action == "daemon":
+        return asyncio.run(run_daemon(args.data_dir))
+    if args.action == "health":
+        health = runtime_health(args.data_dir)
+        console.print("ready" if health.get("running") else "stopped")
+        return 0 if health.get("running") else 1
+    return 0 if stop_runtime(args.data_dir) else 1
 
 
 if __name__ == "__main__":

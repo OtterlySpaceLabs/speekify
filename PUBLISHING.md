@@ -1,81 +1,62 @@
 # Publishing Speekify
 
-This document explains how to publish Speekify on PyPI.
+This is the PyPI-specific overview. The canonical end-to-end checklist for
+PyPI and Homebrew is [docs/release-procedure.md](docs/release-procedure.md).
 
-## Prerequisites
+## One-time PyPI setup
 
-1. GitHub repository with admin access
-2. PyPI account (create at https://pypi.org)
-3. PyPI trusted publisher configured
+Configure a PyPI trusted publisher with:
 
-## Setup (One-time)
+- project: `speekify`
+- GitHub owner/repository: `OtterlySpaceLabs/speekify`
+- workflow: `publish.yml`
+- environment: `pypi`
 
-### 1. Configure PyPI Trusted Publisher
+Create the matching `pypi` environment in GitHub. No PyPI API-token secret is
+needed because `.github/workflows/publish.yml` uses GitHub OIDC.
 
-On PyPI, add a trusted publisher for this repository:
-- Go to https://pypi.org/manage/account/publishing/
-- Add a new trusted publisher:
-  - PyPI Project Name: `speekify`
-  - GitHub Repository Owner: `OtterlySpaceLabs`
-  - GitHub Repository Name: `speekify`
-  - GitHub Workflow Name: `publish.yml`
-  - GitHub Environment Name: `pypi`
+## Publish a release
 
-### 2. Create GitHub Environment
-
-1. Go to repository Settings → Environments
-2. Create new environment named `pypi`
-3. No secrets needed (using OIDC token from PyPI)
-
-## Publishing a Release
-
-### 1. Update Version
-
-Update the version in `pyproject.toml`:
-
-```toml
-[project]
-version = "0.2.0"
-```
-
-### 2. Commit and Create Tag
+Update both version declarations, validate, commit, and push:
 
 ```bash
-git add pyproject.toml
-git commit -m "chore: bump version to 0.2.0"
-git tag v0.2.0
-git push origin main v0.2.0
+# pyproject.toml: [project].version = "0.2.0"
+uv sync --group dev
+uv run pytest
+uv run ruff check .
+
+git add pyproject.toml uv.lock
+git commit -m "chore(release): bump version to 0.2.0"
+git push origin main
 ```
 
-### 3. Create Release on GitHub
+Create and push `v0.2.0`, then publish the GitHub Release. Publishing the
+Release triggers two independent workflows:
 
-1. Go to Releases → Draft a new release
-2. Select tag `v0.2.0`
-3. Set title to `v0.2.0` (or add notes)
-4. Click "Publish release"
+- `publish.yml` tests, builds and inspects the wheel/sdist, then publishes them
+  to PyPI through the trusted publisher.
+- `release.yml` builds the arm64 macOS payload used by Homebrew, attaches that
+  technical asset, renders `Formula/speekify.rb`, and commits the formula to
+  `main`.
 
-## What Happens Next
+The Homebrew payload is not a documented third installation path.
 
-The `publish.yml` workflow will:
-1. Build the distribution files (wheel + sdist)
-2. Publish to PyPI using OIDC token authentication
-3. Create a release asset with build logs
+## Verify
 
-You can monitor progress in Actions tab.
+Use a clean Python 3.11+ environment:
 
-## Verification
-
-After publishing, verify on PyPI:
-- https://pypi.org/project/speekify/
-
-Test installation:
 ```bash
-pip install --upgrade speekify
-speekify --version
+python -m venv /tmp/speekify-release-test
+/tmp/speekify-release-test/bin/pip install "speekify==0.2.0"
+/tmp/speekify-release-test/bin/speekify --version
+/tmp/speekify-release-test/bin/speekify --help
+/tmp/speekify-release-test/bin/speekify --doctor
 ```
 
-## Notes
+`--doctor` reports whether the pinned Temporal runtime is already available or
+can be provisioned, but does not download it. A clean pip/pipx/uv installation
+downloads and verifies Temporal CLI 1.8.1 on its first real generation.
+Automatic provisioning supports macOS and Linux on `arm64`/`amd64`; Windows is
+not supported.
 
-- The `test.yml` workflow runs on every push/PR to catch issues before publishing
-- Both `pip install speekify` and `uv tool install speekify` will work after publishing
-- Releases are immutable on PyPI (cannot re-upload same version)
+PyPI releases are immutable. A broken upload requires a new version.

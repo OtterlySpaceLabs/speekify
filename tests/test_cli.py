@@ -3,15 +3,27 @@ from __future__ import annotations
 from io import StringIO
 import re
 
+import pytest
+
 from speekify.__main__ import _build_doctor_report, main
 from speekify.extract import ExtractedContent
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationResult
+from speekify.temporal_models import (
+    BatchItemResultV1,
+    BatchWorkflowResultV1,
+    GenerationWorkflowResultV1,
+)
 
 
 def _normalize_console_output(text: str) -> str:
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
     return " ".join(text.split())
+
+
+@pytest.fixture(autouse=True)
+def local_data_dir(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SPEEKIFY_DATA_DIR", str(tmp_path / "speekify-data"))
 
 
 def test_main_without_input_requires_source(monkeypatch, capsys) -> None:
@@ -206,6 +218,7 @@ def test_main_prints_hint_for_unsupported_characters(monkeypatch, capsys) -> Non
 
 
 def test_main_verbose_prints_log_path_on_error(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("SPEEKIFY_DATA_DIR", "/tmp/speekify-test-data")
     async def fake_run_generation(*_: object, **__: object) -> GenerationResult:
         raise RuntimeError("Model failed to load")
 
@@ -217,11 +230,12 @@ def test_main_verbose_prints_log_path_on_error(monkeypatch, capsys) -> None:
     assert exit_code == 1
     assert "Model failed to load" in stderr
     assert "Log file:" in stderr
-    assert "logs/speekify.log" in stderr
+    assert "/tmp/speekify-test-data/runtime/speekify.log" in stderr
 
 
 def test_main_writes_generation_errors_to_default_log(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SPEEKIFY_DATA_DIR", str(tmp_path / "data"))
 
     async def fake_run_generation(*_: object, **__: object) -> GenerationResult:
         raise RuntimeError("Model failed to load")
@@ -231,7 +245,7 @@ def test_main_writes_generation_errors_to_default_log(tmp_path, monkeypatch, cap
     exit_code = main(["Hello"])
     capsys.readouterr()
 
-    content = (tmp_path / "logs" / "speekify.log").read_text(encoding="utf-8")
+    content = (tmp_path / "data" / "runtime" / "speekify.log").read_text(encoding="utf-8")
     assert exit_code == 1
     assert "Logger configured" in content
     assert "CLI generation failed" in content
@@ -288,6 +302,54 @@ def test_main_reads_stdin_when_available(tmp_path, monkeypatch, capsys) -> None:
 
     assert exit_code == 0
     assert str(tmp_path / "stdin.wav") in stdout
+
+
+def test_main_batch_keeps_sources_separate(tmp_path, monkeypatch, capsys) -> None:
+    first = tmp_path / "first.txt"
+    second = tmp_path / "second.md"
+    first.write_text("First", encoding="utf-8")
+    second.write_text("Second", encoding="utf-8")
+
+    async def fake_run_batch(sources, **kwargs):
+        assert sources == [str(first), str(second)]
+        generation = GenerationWorkflowResultV1(
+            job_id="job",
+            workflow_id="workflow",
+            request_fingerprint="fingerprint",
+            output_path=str(tmp_path / "first.wav"),
+            output_sha256="hash",
+            output_size=8,
+            title="First",
+            language_code="en",
+            text_length=5,
+            duration_seconds=1.0,
+            batch_count=1,
+        )
+        return BatchWorkflowResultV1(
+            batch_id="batch",
+            workflow_id="batch-workflow",
+            items=[
+                BatchItemResultV1(
+                    index=0,
+                    source_id="source",
+                    display_name="first.txt",
+                    status="completed",
+                    generation=generation,
+                )
+            ],
+            completed_count=1,
+            failed_count=0,
+            cancelled_count=0,
+        )
+
+    monkeypatch.setattr("speekify.application.run_batch", fake_run_batch)
+
+    exit_code = main(["batch", str(first), str(second)])
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Batch complete" in stdout
+    assert str(tmp_path / "first.wav") in stdout
 
 
 def test_main_dry_run_renders_inspection(tmp_path, monkeypatch, capsys) -> None:

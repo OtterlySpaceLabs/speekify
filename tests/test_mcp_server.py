@@ -6,9 +6,24 @@ import pytest
 
 from speekify.application import build_generation_request
 from speekify.extract import ExtractedContent
-from speekify.mcp_server import create_mcp_server, generate_wav, generation_defaults
+from speekify.mcp_server import (
+    create_mcp_server,
+    generate_batch_wav,
+    generate_wav,
+    generation_defaults,
+)
+from speekify.temporal_models import (
+    BatchItemResultV1,
+    BatchWorkflowResultV1,
+    GenerationWorkflowResultV1,
+)
 from speekify.tts import PreparedText, SynthesisArtifact
 from speekify.workflow import GenerationResult
+
+
+@pytest.fixture(autouse=True)
+def local_data_dir(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SPEEKIFY_DATA_DIR", str(tmp_path / "speekify-data"))
 
 
 def test_generation_defaults_are_mcp_serializable() -> None:
@@ -80,6 +95,7 @@ def test_generation_request_rejects_invalid_mcp_inputs(field: str, value: str, m
 
 
 def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SPEEKIFY_DATA_DIR", str(tmp_path / "data"))
     async def fake_generate_with_dependencies(request, *, logger):
         output_path = request.output_dir / "recap.wav"
         output_path.write_text("wav", encoding="utf-8")
@@ -119,7 +135,7 @@ def test_generate_wav_returns_structured_mcp_payload(tmp_path, monkeypatch) -> N
     assert result["title"] == "Recap"
     assert result["text_length"] == len("Bonjour.")
     assert result["warnings"] == []
-    assert str(result["log_path"]).endswith("logs/speekify.log")
+    assert str(result["log_path"]).endswith("data/runtime/speekify.log")
 
 
 def test_generate_wav_returns_supplied_title_in_structured_payload(tmp_path, monkeypatch) -> None:
@@ -156,6 +172,33 @@ def test_generate_wav_returns_supplied_title_in_structured_payload(tmp_path, mon
     )
 
     assert result["title"] == "Custom title"
+
+
+def test_generate_wav_prefers_durable_text_length(tmp_path, monkeypatch) -> None:
+    async def fake_generate_with_dependencies(request, *, logger):
+        output_path = request.output_dir / "durable.wav"
+        output_path.write_text("wav", encoding="utf-8")
+        return GenerationResult(
+            output_path=output_path,
+            artifact=SynthesisArtifact(
+                wav=None,
+                duration_seconds=1.0,
+                batch_count=1,
+                prepared_text=PreparedText("", "", False, (), 0),
+            ),
+            content=ExtractedContent(text="", title="Durable title"),
+            text_length=123,
+        )
+
+    monkeypatch.setattr(
+        "speekify.mcp_server._generate_with_dependencies",
+        fake_generate_with_dependencies,
+    )
+
+    result = asyncio.run(generate_wav("Private input", output_dir=str(tmp_path)))
+
+    assert result["title"] == "Durable title"
+    assert result["text_length"] == 123
 
 
 def test_generation_request_can_use_user_config_defaults(tmp_path, monkeypatch) -> None:
@@ -212,3 +255,42 @@ def test_create_mcp_server_registers_fastmcp_instance() -> None:
     server = create_mcp_server()
 
     assert server.name == "Speekify"
+
+
+def test_generate_batch_wav_returns_itemized_payload(tmp_path, monkeypatch) -> None:
+    async def fake_run_batch(sources, **kwargs):
+        generation = GenerationWorkflowResultV1(
+            job_id="job",
+            workflow_id="workflow",
+            request_fingerprint="fingerprint",
+            output_path=str(tmp_path / "one.wav"),
+            output_sha256="hash",
+            output_size=8,
+            title="One",
+            language_code="en",
+            text_length=3,
+            duration_seconds=1.0,
+            batch_count=1,
+        )
+        return BatchWorkflowResultV1(
+            batch_id="batch",
+            workflow_id="batch-workflow",
+            items=[
+                BatchItemResultV1(
+                    index=0,
+                    source_id="source",
+                    display_name="one.txt",
+                    status="completed",
+                    generation=generation,
+                )
+            ],
+            completed_count=1,
+            failed_count=0,
+            cancelled_count=0,
+        )
+
+    monkeypatch.setattr("speekify.mcp_server.run_batch", fake_run_batch)
+    result = asyncio.run(generate_batch_wav(["one.txt"], output_dir=str(tmp_path)))
+
+    assert result["completed_count"] == 1
+    assert result["items"][0]["output_path"] == str(tmp_path / "one.wav")

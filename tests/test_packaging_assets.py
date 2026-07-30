@@ -34,9 +34,21 @@ def test_render_formula_installs_manpage_and_checks_help() -> None:
     )
 
     # onedir install: libexec dir + bin symlink, not a bare bin.install.
+    assert 'depends_on "temporal"' in formula
     assert 'libexec.install "speekify"' in formula
     assert 'bin.install_symlink libexec/"speekify/speekify"' in formula
     assert 'man1.install "share/man/man1/speekify.1"' in formula
     assert 'assert_match "speekify --doctor", shell_output("#{bin}/speekify --help")' in formula
     assert 'assert_match "0.0.3", shell_output("#{bin}/speekify --version")' in formula
     assert 'assert_predicate man1/"speekify.1", :exist?' in formula
+
+
+def test_homebrew_payload_does_not_bundle_temporal() -> None:
+    script_path = (
+        Path(__file__).resolve().parents[1] / "scripts" / "build_homebrew_payload_macos.sh"
+    )
+    content = script_path.read_text(encoding="utf-8")
+
+    assert "speekify-homebrew-macos-${arch}.tar.gz" in content
+    assert 'cp "$temporal_bin"' not in content
+    assert "TEMPORAL_LICENSE" not in content

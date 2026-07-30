@@ -26,6 +26,7 @@ dependencies = [
   "mcp>=1.13",
   "yt-dlp>=2024.12.13",
   "pypdf>=5.0",
+  "temporalio>=1.18,<2",
 ]
 
 [project.scripts]

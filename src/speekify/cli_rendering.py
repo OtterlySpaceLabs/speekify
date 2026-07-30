@@ -17,6 +17,12 @@ DOCTOR_REMEDIATION = "Run `speekify setup` to download or repair the local model
 def format_status(message: str) -> str:
     labels = {
         "starting": "Preparing Speekify",
+        "starting local engine": "Preparing local reliability engine",
+        "preparing source": "Preparing source",
+        "loading audio model": "Loading speech model",
+        "generating speech": "Generating speech",
+        "audio ready": "Audio ready",
+        "preparing diagnostics": "Preparing diagnostic report",
         "extracting URL": "Extracting readable page text",
         "preparing content": "Removing non-spoken content",
         "checking language": "Checking input language",
@@ -40,6 +46,9 @@ def format_error_message(error: Exception, *, log_path: Path | None = None) -> s
 
     if log_path is not None:
         message = f"{message}\nLog file: {log_path}"
+    diagnostic_report = getattr(error, "diagnostic_report_path", None)
+    if diagnostic_report is not None:
+        message = f"{message}\nDiagnostic report: {diagnostic_report}"
     return message
 
 
@@ -94,7 +103,51 @@ def render_generation_success(generation: Any, *, log_path: Path | None) -> None
         crop=False,
     )
     console.print(f"Duration: {generation.artifact.duration_seconds:.2f}s", style="green")
-    render_warnings(generation.artifact.summary_notes())
+    notes = list(getattr(generation, "warnings", ())) or generation.artifact.summary_notes()
+    render_warnings(notes)
+    if getattr(generation, "diagnostic_report_path", None):
+        console.print(f"Diagnostic report: {generation.diagnostic_report_path}", style="yellow")
+
+
+def render_batch_success(result: Any, *, log_path: Path | None) -> None:
+    table = Table(box=box.SIMPLE, expand=False)
+    table.add_column("Source", style="bold")
+    table.add_column("Status")
+    table.add_column("File or error")
+    for item in result.items:
+        if item.status == "completed" and item.generation is not None:
+            value = item.generation.output_path
+            status = "[green]ready[/green]"
+        else:
+            value = item.error_message or item.status
+            status = f"[red]{item.status}[/red]"
+        table.add_row(item.display_name, status, value)
+    if log_path is not None:
+        table.caption = f"Log: {log_path}"
+    console.print(
+        Panel(
+            table,
+            title="Batch complete",
+            title_align="left",
+            border_style="green" if not result.failed_count else "yellow",
+            box=box.ROUNDED,
+        )
+    )
+    console.print(
+        f"Ready: {result.completed_count}  Failed: {result.failed_count}",
+        style="green" if not result.failed_count else "yellow",
+    )
+    for item in result.items:
+        if item.status == "completed" and item.generation is not None:
+            console.print(
+                f"Saved: {item.generation.output_path}",
+                style="green",
+                no_wrap=True,
+                overflow="ignore",
+                crop=False,
+            )
+    if result.diagnostic_report_path:
+        console.print(f"Diagnostic report: {result.diagnostic_report_path}", style="yellow")
 
 
 def render_inspection_success(inspection: Any, *, log_path: Path | None) -> None:

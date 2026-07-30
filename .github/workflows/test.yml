@@ -29,6 +29,8 @@ jobs:
 
       - name: Run tests
         run: uv run pytest tests/ -v
+        env:
+          SPEEKIFY_RUN_TEMPORAL_TESTS: "1"
 
       - name: Check code quality
         run: uv run ruff check src/ tests/

@@ -14,7 +14,8 @@ each group.
 
 The CLI uses concise Rich output: progress/status indicators during longer
 work, a result panel when the WAV file is ready, and readable error messages.
-Technical log paths are shown only with `--verbose`.
+Technical runtime log paths are shown with `--verbose`; redacted workflow
+reports are also shown when one is created.
 
 ## Commands
 
@@ -43,6 +44,10 @@ uv run speekify --url https://example.com/article
 # Pipe text from stdin
 printf 'Hello from stdin' | speekify
 printf 'Hello from stdin' | uv run speekify
+
+# Generate one WAV per item; directories are expanded recursively
+speekify batch article.pdf https://example.com ~/Documents/notes
+uv run speekify batch ./documents
 
 # Override output name and directory
 speekify --title my-article --output-dir ~/Desktop "Hello world"
@@ -106,7 +111,7 @@ uv run speekify setup --help
 | Option | Default | Description |
 |---|---|---|
 | `source` | *(stdin if piped)* | Text to synthesize, a URL to extract, or a path to a local `.txt`/`.md`/`.text`/`.pdf` file. Required unless stdin is piped. |
-| `--lang CODE` | `auto` (auto-detect) | Supertonic ISO 639-1 language code. Omit to auto-detect the source language and synthesize in it with no translation; falls back to `na` (language-agnostic) when the language can't be detected. Pass `--lang fr` to translate English input to French before TTS. Supported: `en`, `fr`, `de`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `ko`, `ar`, `hi`, `tr`, `uk`, `vi`, and more. Use `na` for language-agnostic synthesis. |
+| `--lang CODE` | `auto` (auto-detect) | Supertonic ISO 639-1 language code. Omit to auto-detect the source language and synthesize in it with no translation; falls back to `na` (language-agnostic) when the language can't be detected. Pass `--lang fr` to translate English input to French before TTS. Supported: `en`, `ko`, `ja`, `ar`, `bg`, `cs`, `da`, `de`, `el`, `es`, `et`, `fi`, `fr`, `hi`, `hr`, `hu`, `id`, `it`, `lt`, `lv`, `nl`, `pl`, `pt`, `ro`, `ru`, `sk`, `sl`, `sv`, `tr`, `uk`, `vi`, and `na`. |
 | `--voice NAME` | `M5` | Supertonic voice. Male: `M1`–`M5`. Female: `F1`–`F5`. |
 | `--custom-style-path PATH` | — | Load a Supertonic voice-style JSON file, such as a Voice Builder export. Overrides `--voice`. |
 | `--speed VALUE` | `0.98` | Playback speed multiplier (`0.7`–`2.0`). |
@@ -122,13 +127,43 @@ uv run speekify setup --help
 | `--verbose` | disabled | Show technical diagnostics such as the log file path when a command fails. |
 | `--version`, `-v` | — | Print the installed Speekify version and exit. |
 
+Temporal is intentionally not exposed as a CLI option. Normal generation
+starts or reconnects to the local reliability runtime automatically, displays
+Rich progress, waits for completion, then prints the final WAV path.
+Homebrew owns the Temporal dependency through the formula. For pip/pipx/uv,
+the first generation downloads a pinned official binary automatically into the
+Speekify data directory and verifies its SHA-256. Later runs work offline; no
+manual runtime installation is required. Automatic provisioning supports
+macOS and Linux on `arm64` and `amd64`; Windows is not supported.
+
+The local service binds only to `127.0.0.1:7233`, runs headless with Temporal
+telemetry/newsfeed and inherited `OTEL_*` exporters disabled, and keeps its
+SQLite state on disk. It stays running while a client generation/batch or a
+Temporal workflow is active. When both are absent for five minutes, it stops
+automatically. A later generation restarts it against the same database.
+
+## Batch generation
+
+`speekify batch SOURCE...` accepts files, URLs, inline text items and
+directories. Directories are traversed recursively in stable path order.
+Supported documents are `.txt`, `.md`, `.text` and `.pdf`; symlinks are not
+followed. Explicit symlinks and explicitly supplied unsupported files are
+rejected; unsupported or symbolic entries discovered inside a directory are
+skipped with a warning. Duplicate sources are processed once. A batch accepts
+at most 1,000 unique items and each file is limited to 50 MiB.
+
+Up to four item workflows may be in flight; the preparation worker runs at most
+two activities concurrently, and synthesis is serialized through one local
+audio worker. The command waits for every item, keeps successful outputs when
+another item fails, and returns a non-zero status if at least one item failed.
+
 ## Maintenance commands
 
 | Command | Description |
 |---|---|
 | `speekify setup` | Download and warm up the local models. |
 | `speekify inspect` | Preview the generation plan without synthesis. |
-| `speekify --doctor` | Verify runtime dependencies, actively load the AI models, and suggest `speekify setup` if a check fails. |
+| `speekify --doctor` | Verify dependencies and runtime support, actively load the AI models, and suggest `speekify setup` if a check fails. It reports whether Temporal is installed or can be provisioned but does not download it. |
 
 The main help output also includes a maintenance section with
 `speekify --version`, `speekify -v`, `speekify --doctor`, and `speekify setup`
@@ -160,11 +195,45 @@ english_islands = true
 ## Output location
 
 By default, direct CLI generation writes the WAV file into the current working
-directory, with names like:
+directory. Durable generation uses the submission time plus a short internal
+job suffix, for example:
 
 ```text
-./article-title-20260528-183000.wav
+./article-title-20260730-183000-a1b2c3d4e5.wav
 ```
 
 Use `--title` to override the file name and `--output-dir` to change the
 destination.
+
+Ordinary successful runs do not create or display a diagnostic log. On an
+error, synthesis warning, reused prepared/audio artifact, or `--verbose` run, Speekify
+creates a redacted report under the local Speekify data directory and prints
+its exact path.
+
+## Local storage, recovery, and network boundaries
+
+The data directory is:
+
+- macOS: `~/Library/Application Support/Speekify`
+- Linux and other POSIX systems:
+  `${XDG_DATA_HOME:-~/.local/share}/speekify`
+- override: `SPEEKIFY_DATA_DIR=/path/to/data`
+
+It contains the managed Temporal CLI for pip-family installs (`bin/`), the
+Temporal SQLite database (`temporal/`), runtime logs and locks (`runtime/`),
+generation receipts/prepared sources (`jobs/`), batch manifests/results
+(`batches/`), and redacted reports (`reports/`). These are operational files;
+there is currently no public CLI for listing or deleting jobs.
+
+Prepared content, receipts, workflow history, and pending/final output hashes
+let idempotent activities continue after a worker or service restart. If a
+client process disappears without sending cancellation and before acknowledging
+its result, repeating the same direct request reattaches to the unacknowledged
+workflow or completed receipt. `Ctrl+C` explicitly requests workflow
+cancellation. Existing batch workflows resume internally when the runtime
+comes back, but there is no public command to look up an earlier batch by ID.
+
+Inline text, local file contents, Temporal state, and audio synthesis are not
+sent to a hosted TTS or Temporal service. Network access is still used when
+Speekify fetches a URL/YouTube transcript, downloads AI models, or provisions
+the pinned Temporal CLI for a pip/pipx/uv installation.
