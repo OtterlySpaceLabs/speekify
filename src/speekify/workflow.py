@@ -17,6 +17,7 @@ from speekify.config import (
     SUPPORTED_TTS_LANGUAGES,
     UNKNOWN_TTS_LANGUAGE,
 )
+from speekify.content_preparation import prepare_content_for_speech
 from speekify.extract import ExtractedContent, extract_url, is_single_url_input, normalize_text
 from speekify.extract_common import is_document_path_input, read_document
 from speekify.naming import build_output_path
@@ -117,6 +118,15 @@ async def resolve_content(
         is_url_mode=is_url_mode,
         logger=logger,
         status_callback=status_callback,
+    )
+    _update_status(status_callback, "preparing content")
+    original_length = len(content.text)
+    prepared_content = await asyncio.to_thread(prepare_content_for_speech, content.text)
+    content = ExtractedContent(text=prepared_content, title=content.title)
+    logger.info(
+        "Content prepared original_length=%s prepared_length=%s",
+        original_length,
+        len(content.text),
     )
 
     if requested_language != AUTO_TTS_LANGUAGE:

@@ -14,6 +14,7 @@ from speekify.extractors.youtube import (
     extract_text_from_timed_subtitle_text,
     extract_text_from_youtube_json3,
 )
+from speekify.extractors.html import extract_from_html
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +61,32 @@ def test_is_single_url_input_rejects_mixed_text_and_url() -> None:
 def test_extracted_content_title_fallback() -> None:
     content = ExtractedContent(text="Bonjour le monde. Ceci est un texte long.", title="")
     assert content.best_title() == "Bonjour le monde"
+
+
+def test_extract_from_html_preserves_table_structure_as_markdown() -> None:
+    html_text = """
+<html>
+  <head><title>Quarterly report</title></head>
+  <body>
+    <article>
+      <h1>Quarterly report</h1>
+      <p>This introduction is long enough to make the readable extraction stable.</p>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <tbody><tr><td>Ada</td><td>Engineer</td></tr></tbody>
+      </table>
+      <p>This conclusion provides additional useful content for the article.</p>
+    </article>
+  </body>
+</html>
+"""
+
+    content = extract_from_html(html_text, min_chars=40)
+
+    assert content is not None
+    assert content.title == "Quarterly report"
+    assert "| Name | Role |" in content.text
+    assert "| Ada | Engineer |" in content.text
 
 
 @pytest.mark.asyncio

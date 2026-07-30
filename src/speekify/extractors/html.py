@@ -13,8 +13,9 @@ def extract_from_html(html_text: str, min_chars: int) -> ExtractedContent | None
     extracted_text = trafilatura.extract(
         html_text,
         include_comments=False,
-        include_tables=False,
+        include_tables=True,
         favor_recall=True,
+        output_format="markdown",
     )
     text = normalize_text(extracted_text or "")
     if len(text) < min_chars:

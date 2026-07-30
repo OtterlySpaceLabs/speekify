@@ -18,6 +18,7 @@ def format_status(message: str) -> str:
     labels = {
         "starting": "Preparing Speekify",
         "extracting URL": "Extracting readable page text",
+        "preparing content": "Removing non-spoken content",
         "checking language": "Checking input language",
         "translating to French": "Translating to French",
         "preparing text": "Preparing text",

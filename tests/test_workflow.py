@@ -4,6 +4,8 @@ import asyncio
 import logging
 from pathlib import Path
 
+import pytest
+
 from speekify.extract import ExtractedContent
 from speekify.translation import TranslationResult
 from speekify.tts import PreparedText, SynthesisArtifact
@@ -106,7 +108,16 @@ def test_resolve_content_autodetects_single_url_input(monkeypatch) -> None:
 
     async def fake_extract_url(url: str) -> ExtractedContent:
         captured["url"] = url
-        return ExtractedContent(text="Contenu extrait", title="Article")
+        return ExtractedContent(
+            text=(
+                "# Contenu extrait\n\n"
+                "![Graphique](chart.png)\n\n"
+                "| Sujet | État |\n"
+                "| --- | --- |\n"
+                "| Pipeline | Prêt |"
+            ),
+            title="Article",
+        )
 
     monkeypatch.setattr("speekify.workflow.extract_url", fake_extract_url)
 
@@ -122,14 +133,21 @@ def test_resolve_content_autodetects_single_url_input(monkeypatch) -> None:
     )
 
     assert captured["url"] == " https://www.faketech.fr/p/le-gros-mytho-danthropic "
-    assert resolved.content == ExtractedContent(text="Contenu extrait", title="Article")
+    assert resolved.content == ExtractedContent(
+        text="Contenu extrait\n\nSujet : Pipeline ; État : Prêt.",
+        title="Article",
+    )
     assert resolved.language_code == "fr"
-    assert statuses == ["extracting URL", "checking language"]
+    assert statuses == ["extracting URL", "preparing content", "checking language"]
 
 
-def test_resolve_content_reads_text_file(tmp_path) -> None:
-    doc = tmp_path / "Mon Article.txt"
-    doc.write_text("Bonjour depuis un fichier.\n", encoding="utf-8")
+@pytest.mark.parametrize("suffix", [".txt", ".md", ".text"])
+def test_resolve_content_reads_and_prepares_text_files(tmp_path, suffix) -> None:
+    doc = tmp_path / f"Mon Article{suffix}"
+    doc.write_text(
+        "# Bonjour depuis un fichier\n\n![Illustration](image.png)\n",
+        encoding="utf-8",
+    )
     statuses: list[str] = []
 
     resolved = asyncio.run(
@@ -144,34 +162,41 @@ def test_resolve_content_reads_text_file(tmp_path) -> None:
     )
 
     assert resolved.content == ExtractedContent(
-        text="Bonjour depuis un fichier.", title="Mon Article"
+        text="Bonjour depuis un fichier", title="Mon Article"
     )
     assert resolved.language_code == "fr"
-    assert statuses == ["reading file", "checking language"]
+    assert statuses == ["reading file", "preparing content", "checking language"]
 
 
-def test_resolve_content_reads_pdf_file(tmp_path) -> None:
-    from speekify.extract_common import read_document
-
+def test_resolve_content_reads_and_prepares_pdf_file(tmp_path) -> None:
     pdf = tmp_path / "rapport.pdf"
-    pdf.write_bytes(_minimal_pdf_bytes("Texte du PDF."))
+    pdf.write_bytes(_minimal_pdf_bytes("Texte du PDF. ![Graphique](ventes.png)"))
 
-    content = read_document(pdf)
+    resolved = asyncio.run(
+        resolve_content(
+            str(pdf),
+            is_url_mode=False,
+            requested_language="fr",
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
 
-    assert "Texte du PDF." in content.text
-    assert content.title == "rapport"
+    assert resolved.content.text == "Texte du PDF."
+    assert resolved.content.title == "rapport"
 
 
 def _minimal_pdf_bytes(text: str) -> bytes:
     # Hand-built single-page PDF with a real text-showing content stream so the
     # pypdf reader path is exercised end to end (no reportlab dependency).
+    escaped_text = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream = f'BT /F1 12 Tf 10 100 Td ({escaped_text}) Tj ET'.encode("latin-1")
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
         b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-        b"<< /Length %d >>\nstream\nBT /F1 12 Tf 10 100 Td (%s) Tj ET\nendstream"
-        % (len(text) + 28, text.encode("latin-1")),
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
     out = bytearray(b"%PDF-1.4\n")
@@ -191,13 +216,66 @@ def _minimal_pdf_bytes(text: str) -> bytes:
     return bytes(out)
 
 
+def test_resolve_content_prepares_transcript_content(monkeypatch) -> None:
+    async def fake_extract_url(url: str) -> ExtractedContent:
+        assert url == "https://www.youtube.com/watch?v=example"
+        return ExtractedContent(
+            text=(
+                "Transcript introduction.\n\n"
+                "![Video frame](frame.jpg)\n\n"
+                "Transcript conclusion."
+            ),
+            title="Video title",
+        )
+
+    monkeypatch.setattr("speekify.workflow.extract_url", fake_extract_url)
+
+    resolved = asyncio.run(
+        resolve_content(
+            "https://www.youtube.com/watch?v=example",
+            is_url_mode=False,
+            requested_language="en",
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert resolved.content == ExtractedContent(
+        text="Transcript introduction.\n\nTranscript conclusion.",
+        title="Video title",
+    )
+
+
+def test_resolve_content_prepares_inline_or_stdin_text_before_detection(monkeypatch) -> None:
+    detected_inputs: list[str] = []
+
+    def fake_detect_language_code(text: str) -> str:
+        detected_inputs.append(text)
+        return "en"
+
+    monkeypatch.setattr("speekify.workflow.detect_language_code", fake_detect_language_code)
+
+    resolved = asyncio.run(
+        resolve_content(
+            "# Spoken title\n\n![Decoration](image.png)\n\nSpoken paragraph.",
+            is_url_mode=False,
+            requested_language="auto",
+            translator=NoopTranslator(),
+            logger=logging.getLogger("speekify.tests.workflow"),
+        )
+    )
+
+    assert detected_inputs == ["Spoken title\n\nSpoken paragraph."]
+    assert resolved.content.text == "Spoken title\n\nSpoken paragraph."
+
+
 def test_resolve_content_translates_english_text_to_french() -> None:
     translator = FrenchTranslator()
     statuses: list[str] = []
 
     resolved = asyncio.run(
         resolve_content(
-            "Hello everyone.",
+            "![Chart](chart.png)\n\nHello [everyone](https://example.com).\n\n```py\nx = 1\n```",
             is_url_mode=False,
             requested_language="fr",
             translator=translator,
@@ -209,7 +287,7 @@ def test_resolve_content_translates_english_text_to_french() -> None:
     assert resolved.content == ExtractedContent(text="Bonjour tout le monde.")
     assert resolved.language_code == "fr"
     assert translator.calls == ["Hello everyone."]
-    assert statuses == ["checking language", "translating to French"]
+    assert statuses == ["preparing content", "checking language", "translating to French"]
 
 
 def test_resolve_content_auto_uses_detected_language_without_translation() -> None:
@@ -230,7 +308,7 @@ def test_resolve_content_auto_uses_detected_language_without_translation() -> No
     assert resolved.language_code == "fr"
     assert resolved.content.text.startswith("Cet article")
     assert translator.calls == []  # auto mode never translates
-    assert statuses == ["checking language"]
+    assert statuses == ["preparing content", "checking language"]
 
 
 def test_resolve_content_auto_keeps_english_source_untranslated() -> None:
@@ -252,7 +330,7 @@ def test_resolve_content_auto_keeps_english_source_untranslated() -> None:
     assert resolved.language_code == "en"
     assert resolved.content.text.startswith("This article")
     assert translator.calls == []
-    assert statuses == ["checking language"]
+    assert statuses == ["preparing content", "checking language"]
 
 
 def test_resolve_content_auto_falls_back_to_language_agnostic_when_undetected() -> None:
@@ -272,7 +350,7 @@ def test_resolve_content_auto_falls_back_to_language_agnostic_when_undetected() 
 
     assert resolved.language_code == "na"
     assert translator.calls == []
-    assert statuses == ["checking language"]
+    assert statuses == ["preparing content", "checking language"]
 
 
 def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
@@ -301,6 +379,7 @@ def test_generate_audio_returns_cleanup_summary(tmp_path) -> None:
         "1 character(s) removed: '😀'",
     ]
     assert statuses == [
+        "preparing content",
         "checking language",
         "preparing text",
         "loading model",
